@@ -18,8 +18,8 @@ sub _evaluate
     my $ser = OpenXPKI::Serialization::Simple->new;
 
     my $white_list = $self->param->{whitelist};
+    my $dns_entries = $self->param->{dns_entries};
 
-    # ^((\*\.)?(([a-z0-9\-])+\.){0,2}((int\.smarthouse\.de|smarthouse\.local|smarthouse-adesso\.de|3as\.local|app3as-cloud\.local|3as-test\.local|example\.com|3as-cloud\.local))\|?)+$
     CTX('log')->application()->info("white_list param: $white_list \n");
     # similar to OpenXPKI::Server::Workflow::Activity::CSR::CheckPolicyDNS
 
@@ -30,7 +30,7 @@ sub _evaluate
     #$cnsans = Set::Scalar->new($hash{CN}[0]);
     my @cnsans = ($hash{CN}[0]);
 
-    # Load SAN
+    # Load SANs
 
     my $san = $context->param('cert_subject_alt_name');
 
@@ -40,50 +40,46 @@ sub _evaluate
             push(@cnsans, $pair->[1]);
         }
     }
-    #@sans = sort(@sans);
+
     my $print_sans = join(", ", @cnsans);
     CTX('log')->application()->info("Testing if White-List matches with $print_sans");
     
-    # Load White-List
+    #parse dns_entries
+    my @dns_entries_array = split /:/, $dns_entries;
 
-    # Read in File
-    #my $file = '/etc/openxpki/config.d/whitelist.txt';
-    #open my $info, '<', $file or do {
-    #    condition_error("Could not open $file: $!");
-    #};
 
-    #my $result = 0;
     foreach my $value (@cnsans) {
-        my $res;
-
-        $res = ($value !~ m{$white_list}) ? 1: 0;
+        my $res = validateCNSANs($value, $white_list, \@dns_entries_array);
         if ($res) {
             CTX('log')->application()->info("$value does not match with regex $white_list : $res Cannot auto-approve");
             condition_error('cn or san does not match with regex. Cannot auto-approve');
         }
     }
 
-    # TODO: bricht bei erster line ab mit "condition_error", wenn diese nicht matched. Schmeiße condition_error erst am Ende...
-    # TODO: Regex will nicht matchen... Komisch
-    #my $result = 0;
-    #while( my $line = <$info>) {
-    #    chomp($line);
-    #    if ($white_list eq $line) {
-    #        CTX('log')->application()->info("EQUAL!!!!!!!!!!!!!!!!!!!!!!!!");
-    #    }
-    #    my $res;
-    #    foreach my $value (@cnsans) {
-    #        CTX('log')->application()->info("Testing, if $value matches with regex $line");
-    #        $res = ($value !~ m{$line}) ? 1: 0;
-    #        if ($res) {
-    #            CTX('log')->application()->info("$value does not match with regex $line : $res Cannot auto-approve");
-    #            condition_error('cn or san does not match with regex. Cannot auto-approve');
-    #        }
-    #    }
-    #}
-
-    #close $info;
     return 1;
+}
+
+# checks, if value is in white-list.
+# also checks for short-dns entries
+# returns 1, if value does not match
+# returns 0, if value matches
+
+sub validateCNSANs {
+    my ($value, $white_list, $ref_dns_entries_array) = @_;
+
+    my @dns_entries_array = @($ref_dns_entries_array);
+
+    if ($value !~ m{$white_list}) {
+        # check for short-dns
+        foreach my $dns_entry (@dns_entries_array) {
+            if ($value.$dns_entry ~ m{$white_list}) {
+                return 0;
+            }
+        }
+        return 1;
+    }
+
+    return 0;
 }
 
 1;
