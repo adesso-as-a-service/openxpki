@@ -69,7 +69,7 @@ sub validateCNSANs {
     if ($value_validate !~ m{$white_list_validate}) {
         CTX('log')->application()->info("Testing for short-dns names.");
         # check for short-dns
-        foreach my $dns_entry @{$ref_dns_entries_array}{
+        foreach my $dns_entry (@{$ref_dns_entries_array}){
             if ($value_validate.$dns_entry =~ m{$white_list_validate}) {
                 CTX('log')->application()->info("Short dns-name $value_validate validated by white-list entry $dns_entry. Auto-Approve successful.");
                 return 0;
