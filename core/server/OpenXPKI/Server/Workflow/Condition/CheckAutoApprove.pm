@@ -12,7 +12,6 @@ use OpenXPKI::Serialization::Simple;
 
 sub _evaluate
 {
-    ##! 1: 'start'
     my ( $self, $workflow ) = @_;
     my $context     = $workflow->context();
     my $ser = OpenXPKI::Serialization::Simple->new;
@@ -51,7 +50,7 @@ sub _evaluate
     foreach my $value (@cnsans) {
         my $res = validateCNSANs($value, $white_list, \@dns_entries_array);
         if ($res) {
-            CTX('log')->application()->info("$value does not match with regex $white_list : $res Cannot auto-approve");
+            CTX('log')->application()->error("$value does not match with regex $white_list : $res Cannot auto-approve");
             condition_error('cn or san does not match with regex. Cannot auto-approve');
         }
     }
@@ -65,14 +64,14 @@ sub _evaluate
 # returns 0, if value matches
 
 sub validateCNSANs {
-    my ($value, $white_list, $ref_dns_entries_array) = @_;
+    my ($value_validate, $white_list_validate, $ref_dns_entries_array) = @_;
 
-    my @dns_entries_array = @($ref_dns_entries_array);
-
-    if ($value !~ m{$white_list}) {
+    if ($value_validate !~ m{$white_list_validate}) {
+        CTX('log')->application()->info("Testing for short-dns names.");
         # check for short-dns
-        foreach my $dns_entry (@dns_entries_array) {
-            if ($value.$dns_entry ~ m{$white_list}) {
+        foreach my $dns_entry @{$ref_dns_entries_array}{
+            if ($value_validate.$dns_entry =~ m{$white_list_validate}) {
+                CTX('log')->application()->info("Short dns-name $value_validate validated by white-list entry $dns_entry. Auto-Approve successful.");
                 return 0;
             }
         }

@@ -81,6 +81,11 @@ sub execute
             next;
         }
 
+        # skip short dns-names for dns validation
+        if ($fqdn !~ m{^\.}) {
+            next;
+        }
+
         # its useless if it is not a fqdn, we dont accept isolated hostnames here
         if ($fqdn !~ m{ \A [a-z0-9] [a-z0-9-]* (\.[a-z0-9-]*[a-z0-9])+ \z }xi) {
             push @errors, $fqdn;
