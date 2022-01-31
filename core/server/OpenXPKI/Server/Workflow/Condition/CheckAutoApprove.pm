@@ -27,7 +27,6 @@ sub _evaluate
     # Load Common Name
     my $dn = OpenXPKI::DN->new( $context->param('cert_subject') );
     my %hash = $dn->get_hashed_content();
-    #$cnsans = Set::Scalar->new($hash{CN}[0]);
     my @cnsans = ($hash{CN}[0]);
 
     # Load SANs
@@ -65,10 +64,10 @@ sub _evaluate
     return 1;
 }
 
-# checks, if value is in white-list.
-# also checks for short-dns entries
-# returns 1, if value does not match
-# returns 0, if value matches
+# checks, if cn or san is in white-list.
+# also checks for short-dns entries and performs a dns lookup
+# returns 1, if cn or san not in white-list. If cn or san is a short-dns: returns 1, if not in white-list and/or dns lookup fails
+# returns 0, if cn or san in white-list. If cn or san is a short-dns: returns 0 if in white-list and dns lookup succeeds.
 
 sub validateCNSANs {
     my ($value_validate, $white_list_validate, $dns_resolver, $ref_dns_entries_array) = @_;
@@ -78,13 +77,13 @@ sub validateCNSANs {
         my $reply;
         # check for short-dns
         foreach my $dns_entry (@{$ref_dns_entries_array}){
-            my $fqdn = $value_validate.$dns_entry;
+            my $fqdn = $value_validate.".".$dns_entry;   
             if ($fqdn =~ m{$white_list_validate}) {
-                eval { $reply = $resolver->send( $fqdn ); };
+                eval { $reply = $dns_resolver->send( $fqdn ); };
                 if ($reply && $reply->answer) {
                     CTX('log')->application()->info("Short dns-name $value_validate validated by white-list entry $dns_entry and resolved dns. Auto-Approve successful.");
+                    return 0;
                 }
-                return 0;
             }
         }
         # no dns resolve or/and white-list matching
