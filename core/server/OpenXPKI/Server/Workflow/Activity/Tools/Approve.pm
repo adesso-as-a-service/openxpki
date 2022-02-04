@@ -119,6 +119,12 @@ sub execute
             user => $user,
             role => $role
         });
+    } elsif ($mode eq 'auto-approve') {
+        push @approvals, {
+                %$approval,
+                'session_user' => 'pre-approved',
+                'session_role' => '',
+            };
     } else {
         configuration_error('Unsuported mode given');
     }
