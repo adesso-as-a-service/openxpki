@@ -66,23 +66,27 @@ sub validateCNSANs {
         CTX('log')->application()->info("Testing for short-dns names.");
         my $reply;
         # check for short-dns
-        if ($value_validate !~ m{^\.}) {
+        if (index($value_validate, ".") == -1) {
             FQDN:
             foreach my $value_ref_cnsans (@{$ref_cnsans}) {
-                if ($value_ref_cnsans !~ m{^\.}) {
+                if (index($value_validate, ".") == -1) {
                     next FQDN;
                 }
 
-                if ($value_validate eq (split /\.\, $value_ref_cnsans)[0]) {
+                my $first = (split /\./, $value_ref_cnsans)[0];
+                if ($value_validate eq $first) {
                     # we can return 0 without checking the fqdn, since auto-approval would then fail at fqdn
+                    CTX('log')->application()->info("$value_validate is a short-dns and got validated by fqdn $value_ref_cnsans");
                     return 0;
                 }
             }
             # short-dns, but no fqdn
+            CTX('log')->application()->error("$value_validate is a short-dns, but no fqdn available : Cannot auto-approve");
             return 1;
         }
         else{
             # no short-dns and no white-list match
+            CTX('log')->application()->error("$value_validate does not match with regex $white_list_validate : Cannot auto-approve");
             return 1;
         }
     }
