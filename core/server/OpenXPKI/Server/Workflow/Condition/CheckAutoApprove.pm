@@ -46,8 +46,7 @@ sub _evaluate
     foreach my $value (@cnsans) {
         my $res = validateCNSANs($value, $white_list, \@cnsans);
         if ($res) {
-            CTX('log')->application()->error("$value does not match with regex $white_list : $res Cannot auto-approve");
-            condition_error('cn or san does not match with regex. Cannot auto-approve');
+            condition_error('Cannot auto-approve');
         }
     }
 
