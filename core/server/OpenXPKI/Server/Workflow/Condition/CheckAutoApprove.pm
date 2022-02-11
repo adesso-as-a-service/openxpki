@@ -64,12 +64,11 @@ sub validateCNSANs {
 
     if ($value_validate !~ m{$white_list_validate}) {
         CTX('log')->application()->info("Testing for short-dns names for dns $value_validate.");
-        my $reply;
         # check for short-dns
         if (index($value_validate, ".") == -1) {
             FQDN:
             foreach my $value_ref_cnsans (@{$ref_cnsans}) {
-                if (index($value_validate, ".") == -1) {
+                if (index($value_ref_cnsans, ".") == -1) {
                     next;
                 }
 
