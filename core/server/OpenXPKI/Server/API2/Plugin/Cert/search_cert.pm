@@ -305,6 +305,87 @@ command "search_cert_count" => {
 
 };
 
+=head2 search_cert_list
+
+Returns a list of all valid certificates for a given email address with its subject alternative names.
+
+B<Parameters>
+
+meta_email describes the email address for all the certificates, that should be returned.
+
+=cut
+command "search_cert_list" => {
+    meta_email => { isa => 'Str', },
+} => sub {
+    my ($self, $params) = @_;
+
+    my $dbi = CTX('dbi');
+    my $mail = $params->meta_email;
+    my $db_results = $dbi->select(
+        from_join => 'certificate identifier=identifier certificate_attributes',
+        columns => [
+            'certificate.identifier',
+            'certificate.subject',
+            'certificate.status',
+            'certificate.notbefore',
+            'certificate.notafter',
+            'certificate_attributes.attribute_value'
+        ],
+        where => {
+            'certificate_attributes.identifier' => $dbi->subselect(IN => {
+                    from   => 'certificate_attributes',
+                    columns => [ 'identifier' ],
+                    where => {
+                        'attribute_value' => { -like => $mail },
+                    },
+                }),
+            'certificate_attributes.attribute_value' => { -like => "DNS%" },
+        },
+    );
+
+    my @result;
+    my @used_identifiers;
+
+    
+
+    while (my $row = $db_results->fetchrow_hashref) {
+
+        my $is_redundant = 0;
+        my @sans;
+
+        for my $res (@result) {
+            # Update the already existing san array. If the identifier is already present in the result, the san has to be added.
+            if ($res->{identifier} eq $row->{identifier}) {
+                $is_redundant = 1;
+                # update item -> change
+
+                # get the pointer of the array
+                my $update = $res->{attribute_value};
+
+                # update array
+                push @$update, $row->{attribute_value};
+            }
+        }
+        # First iteration of the certificate identifier. Create certificate return object
+        if ($is_redundant == 0) {
+
+            push @sans, $row->{attribute_value};
+
+            my $item = {
+                identifier  => $row->{identifier},
+                subject     => $row->{subject},
+                notbefore   => $row->{notbefore},
+                notafter    => $row->{notafter},
+                status      => $row->{status},
+                attribute_value => \@sans,
+            };
+            push @result, $item;
+        }
+    }
+
+    return \@result;
+};
+
 sub _make_db_query {
     my ($self, $po) = @_;
 
