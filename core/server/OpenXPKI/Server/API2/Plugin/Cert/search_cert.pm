@@ -360,7 +360,7 @@ command "search_cert_list" => {
                 # update item -> change
 
                 # get the pointer of the array
-                my $update = $res->{attribute_value};
+                my $update = $res->{subject_alt_names};
 
                 # update array
                 push @$update, $row->{attribute_value};
@@ -377,7 +377,7 @@ command "search_cert_list" => {
                 notbefore   => $row->{notbefore},
                 notafter    => $row->{notafter},
                 status      => $row->{status},
-                attribute_value => \@sans,
+                subject_alt_names => \@sans,
             };
             push @result, $item;
         }
