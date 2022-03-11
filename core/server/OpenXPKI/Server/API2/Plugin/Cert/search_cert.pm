@@ -339,7 +339,7 @@ command "search_cert_list" => {
                         'attribute_value' => { -like => $mail },
                     },
                 }),
-            'certificate_attributes.attribute_value' => { -like => "DNS%" },
+            'certificate_attributes.attribute_contentkey' => { -like => "subject_alt_name%" },
         },
     );
 
