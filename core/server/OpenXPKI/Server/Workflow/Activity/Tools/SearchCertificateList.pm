@@ -34,7 +34,7 @@ sub execute
     if (@{$result}) {
 
         $context->param( $target_key => \@{$result});
-        CTX('log')->application()->trace("SearchCertificates result " . Dumper \@{$result});
+        CTX('log')->log("SearchCertificateList result " . Dumper \@{$result});
 
     } else {
         $context->param( { $target_key => undef } );
