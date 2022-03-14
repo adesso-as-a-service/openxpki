@@ -9,7 +9,9 @@ use OpenXPKI::Debug;
 use English;
 use OpenXPKI::Exception;
 use Net::DNS;
+use Data::Validate::IP;
 use OpenXPKI::Serialization::Simple;
+use Socket;
 
 sub _evaluate
 {
@@ -27,15 +29,28 @@ sub _evaluate
     my $dn = OpenXPKI::DN->new( $context->param('cert_subject') );
     my %hash = $dn->get_hashed_content();
     my @cnsans = ($hash{CN}[0]);
+    my @ips;
 
     # Load SANs
 
     my $san = $context->param('cert_subject_alt_name');
 
+    my $validator = Data::Validate::IP->new;
+
     if ($san) {
         my $sans_csr = $ser->deserialize( $context->param('cert_subject_alt_name'));
         foreach my $pair (@{$sans_csr}) {
-            push(@cnsans, $pair->[1]);
+            if ($pair->[0] eq 'DNS') {
+                if ($validator->is_ipv4($pair->[1])) {
+                    my $debug_ip = $pair->[1];
+                    CTX('log')->application()->debug("IP detected: $debug_ip");
+                    push(@ips, $pair->[1]);
+                }
+                else {
+                    push(@cnsans, $pair->[1]);
+                }
+            }
+            # ignore 'IP' labeled entries
         }
     }
 
@@ -46,7 +61,14 @@ sub _evaluate
     foreach my $value (@cnsans) {
         my $res = validateCNSANs($value, $white_list, \@cnsans);
         if ($res) {
-            condition_error('Cannot auto-approve');
+            condition_error('Validation for DNS SAN entries failed. Cannot auto-approve');
+        }
+    }
+
+    foreach my $ip (@ips) {
+        my $res = validateIPs(\@ips, \@cnsans);
+        if ($res) {
+            condition_error('Couldnt find any successful dns lookup results. Cannot auto-approve');
         }
     }
 
@@ -88,7 +110,42 @@ sub validateCNSANs {
             return 1;
         }
     }
+
     # fqdn matches whitelist
+    return 0;
+}
+
+# validates all IP san entries by performing a dns lookup for all DNS san entries.
+# parameters:
+# ref_ips is the array of all detected IP san entries
+# ref_cnsans is the array of all the detected DNS san entries
+
+# returns:
+# 1, if for any IP san no DNS san lookup could result in the IP-Adress
+# 0, if for all the IP sans, there is at least one successful DNS lookup
+
+sub validateIPs {
+    my ($ref_ips, $ref_cnsans) = @_;
+
+    foreach my $ip (@{$ref_ips}) {
+        my $result = 1;
+
+        LOOP:
+        foreach my $name (@{$ref_cnsans}) {
+            # perform dns lookup for value_ref_cnsans
+            my @addresses = gethostbyname($name) or next;
+            @addresses = map { inet_ntoa($_) } @addresses[4 .. $#addresses];
+
+            if ( grep( /^$ip$/, @addresses)) {
+                $result = 0;
+            }
+        }
+
+        if ($result != 0) {
+            CTX('log')->application()->info("Couldn't find any successful dns lookup results for IP SAN adress $ip. Cannot auto-approve");
+            return 1;
+        }
+    }
     return 0;
 }
 
