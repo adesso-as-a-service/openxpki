@@ -21,7 +21,8 @@ sub _evaluate
 
     my $white_list = $self->param->{whitelist};
 
-    CTX('log')->application()->info("white_list param: $white_list \n");
+    CTX('log')->application()->info("Testing for Auto-Approve.");
+    CTX('log')->application()->debug("white_list param: $white_list \n");
     # similar to OpenXPKI::Server::Workflow::Activity::CSR::CheckPolicyDNS
 
     
@@ -41,21 +42,26 @@ sub _evaluate
         my $sans_csr = $ser->deserialize( $context->param('cert_subject_alt_name'));
         foreach my $pair (@{$sans_csr}) {
             if ($pair->[0] eq 'DNS') {
+                my $debug_san = $pair->[1];
                 if ($validator->is_ipv4($pair->[1])) {
-                    my $debug_ip = $pair->[1];
-                    CTX('log')->application()->debug("IP detected: $debug_ip");
+                    CTX('log')->application()->debug("IP DNS SAN detected: $debug_san");
                     push(@ips, $pair->[1]);
                 }
                 else {
+                    CTX('log')->application()->debug("Non-IP DNS SAN detected: $debug_san");
                     push(@cnsans, $pair->[1]);
                 }
+            }
+            else {
+                my $debug_san = $pair->[1];
+                CTX('log')->application()->debug("The following SAN is not labeled with DNS. Skipping: $debug_san");
             }
             # ignore 'IP' labeled entries
         }
     }
 
     my $print_sans = join(", ", @cnsans);
-    CTX('log')->application()->info("Testing if White-List matches with $print_sans");
+    CTX('log')->application()->debug("Testing for each entry in $print_sans white-list");
 
 
     foreach my $value (@cnsans) {
@@ -72,6 +78,8 @@ sub _evaluate
         }
     }
 
+    CTX('log')->application()->info("Auto-Approve successful");
+
     return 1;
 }
 
@@ -84,9 +92,9 @@ sub validateCNSANs {
     my ($value_validate, $white_list_validate, $ref_cnsans) = @_;
 
     if ($value_validate !~ m{$white_list_validate}) {
-        CTX('log')->application()->info("Testing for short-dns names for dns $value_validate.");
         # check for short-dns
         if (index($value_validate, ".") == -1) {
+            CTX('log')->application()->debug("Short-DNS found: $value_validate");
             FQDN:
             foreach my $value_ref_cnsans (@{$ref_cnsans}) {
                 if (index($value_ref_cnsans, ".") == -1) {
@@ -96,7 +104,7 @@ sub validateCNSANs {
                 my $first = (split /\./, $value_ref_cnsans)[0];
                 if ($value_validate eq $first) {
                     # we can return 0 without checking the fqdn, since auto-approval would then fail at fqdn
-                    CTX('log')->application()->info("$value_validate is a short-dns and got validated by fqdn $value_ref_cnsans");
+                    CTX('log')->application()->debug("$value_validate is a short-dns and got validated by fqdn $value_ref_cnsans");
                     return 0;
                 }
             }
@@ -137,6 +145,7 @@ sub validateIPs {
             @addresses = map { inet_ntoa($_) } @addresses[4 .. $#addresses];
 
             if ( grep( /^$ip$/, @addresses)) {
+                CTX('log')->application()->debug("IP $ip got validated by Non-IP DNS SAN $name");
                 $result = 0;
             }
         }
