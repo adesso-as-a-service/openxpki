@@ -12,6 +12,8 @@ OpenXPKI::Server::API2::Plugin::Cert::search_cert
 # CPAN modules
 use Regexp::Common;
 use Data::Dumper;
+use Hash::Ordered;
+use Tie::IxHash;
 
 # Project modules
 use OpenXPKI::Debug;
@@ -355,12 +357,14 @@ command "search_cert_list" => {
 
         for my $res (@result) {
             # Update the already existing san array. If the identifier is already present in the result, the san has to be added.
-            if ($res->{identifier} eq $row->{identifier}) {
+            my $identifier_row = @$res[0];
+            if ($identifier_row->{identifier} eq $row->{identifier}) {
                 $is_redundant = 1;
                 # update item -> change
 
                 # get the pointer of the array
-                my $update = $res->{subject_alt_names};
+                my $san_row = @$res[5];
+                my $update = $san_row->{subject_alt_names};
 
                 # update array
                 push @$update, $row->{attribute_value};
@@ -371,15 +375,16 @@ command "search_cert_list" => {
 
             push @sans, $row->{attribute_value};
 
-            my $item = {
-                identifier  => $row->{identifier},
-                subject     => $row->{subject},
-                notbefore   => $row->{notbefore},
-                notafter    => $row->{notafter},
-                status      => $row->{status},
-                subject_alt_names => \@sans,
-            };
-            push @result, $item;
+            # Hashes in Array
+            my @cert_object = (
+                { identifier => $row->{identifier},},
+                { subject     => $row->{subject},},
+                { notbefore   => $row->{notbefore},},
+                { notafter    => $row->{notafter},},
+                { status      => $row->{status},},
+                { subject_alt_names => \@sans,},
+            );
+            push @result, \@cert_object;
         }
     }
 
