@@ -12,8 +12,6 @@ OpenXPKI::Server::API2::Plugin::Cert::search_cert
 # CPAN modules
 use Regexp::Common;
 use Data::Dumper;
-use Hash::Ordered;
-use Tie::IxHash;
 
 # Project modules
 use OpenXPKI::Debug;
