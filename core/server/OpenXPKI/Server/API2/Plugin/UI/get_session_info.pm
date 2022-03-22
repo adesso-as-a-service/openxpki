@@ -7,7 +7,9 @@ OpenXPKI::Server::API2::Plugin::UI::get_session_info
 
 =cut
 
+use Data::Dumper;
 # Project modules
+use OpenXPKI::Debug;
 use OpenXPKI::Server::Context qw( CTX );
 use OpenXPKI::Server::API2::Types;
 
@@ -44,7 +46,9 @@ command "get_session_info" => {
 } => sub {
     my ($self, $params) = @_;
 
+    ##! 1: 'start'
     my $session = CTX('session');
+    ##! 64: Dumper $session->data
 
     my $realname = $session->data->user;
     if (ref $session->data->userinfo eq 'HASH' &&
@@ -54,6 +58,15 @@ command "get_session_info" => {
 
     my $role_label = CTX('config')->get([ 'auth', 'roles', $session->data->role, 'label' ]) || $session->data->role;
     my $pki_realm_label = CTX('config')->get([ 'system', 'realms', $session->data->pki_realm, 'label' ]) || $session->data->pki_realm;
+
+    my @tenants;
+    # only expose tenant list if the current session has a handler
+    if ($session->data->has_tenants && CTX('authentication')->has_tenant_handler()) {
+        @tenants = map {
+            my $tenant_label = CTX('config')->get([ 'auth', 'tenant', $_, 'label' ]);
+            { value => $_, label => ($tenant_label || $_) };
+        } @{$session->data->tenants};
+    }
 
     return {
         name            => $session->data->user,
@@ -66,6 +79,7 @@ command "get_session_info" => {
         sid             => substr($session->id,0,4),
         userinfo        => $session->data->userinfo || {},
         authinfo        => $session->data->authinfo || {},
+        (@tenants ? (tenants => \@tenants) : ()),
     }
 };
 

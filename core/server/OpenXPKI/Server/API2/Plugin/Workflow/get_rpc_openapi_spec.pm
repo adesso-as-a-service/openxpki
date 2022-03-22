@@ -14,8 +14,6 @@ use List::Util;
 use JSON;
 
 # Project modules
-use OpenXPKI::Client::Config;
-use OpenXPKI::Connector::WorkflowContext;
 use OpenXPKI::i18n qw( i18nGettext );
 use OpenXPKI::Server::Context qw( CTX );
 use OpenXPKI::Server::API2::Types;
@@ -100,7 +98,7 @@ command "get_rpc_openapi_spec" => {
 
     my $workflow = $params->workflow;
 
-    if (not $self->factory->authorize_workflow({ ACTION => 'create', TYPE => $workflow })) {
+    if (not $self->factory->can_create_workflow( $workflow )) {
         OpenXPKI::Exception->throw(
             message => 'User is not authorized to fetch workflow info',
             params => { workflow => $workflow }
@@ -131,6 +129,7 @@ sub _openapi_field_schema {
 
     my $field_specs = {}; # HashRef { fieldname => { type => ... }, fieldname => ... }
     my @required_fields;
+    my @missing_fields;
 
     # skip fields defined in RPC spec but not available in workflow
     for my $fieldname ( @$rpc_spec_field_names ) {
@@ -184,10 +183,10 @@ sub _openapi_field_schema {
                 $field = { %$field, %$match };
             }
 
-            OpenXPKI::Exception->throw(
-                message => 'Missing OpenAPI type mapping for OpenXPKI type. This can be fixed by writing a workflow field specification including parameter "api_type".',
-                params => { workflow => $workflow, field => $wf_field->{name}, openxpki_type => $internal_type }
-            ) unless scalar keys %$field;
+            if (!scalar keys %$field) {
+                push @missing_fields, $wf_field->{name};
+                $field = { type => 'unknown' };
+            }
 
             # special handling for multivalue fields:
             # they are represented as Arrays of values of their specified type
@@ -205,6 +204,10 @@ sub _openapi_field_schema {
         $field->{description} .= " ($hint)" if $hint;
 
         $field_specs->{$fieldname} = $field;
+    }
+
+    if (@missing_fields) {
+        CTX('log')->system()->warn("Missing definitions for OpenAPI Spec for $workflow / ".join(", ", @missing_fields));
     }
 
     return {

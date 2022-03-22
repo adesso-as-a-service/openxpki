@@ -2,6 +2,7 @@ package OpenXPKI::Server::Authentication::Password;
 
 use strict;
 use warnings;
+use English;
 
 use Moose;
 use Data::Dumper;
@@ -11,6 +12,12 @@ use OpenXPKI::Server::Authentication::Handle;
 use OpenXPKI::Server::Context qw( CTX );
 
 extends 'OpenXPKI::Server::Authentication::Base';
+
+has mode => (
+    is => 'ro',
+    isa => 'Str',
+    default => 'digest'
+);
 
 sub handleInput {
 
@@ -27,23 +34,39 @@ sub handleInput {
     ##! 16: "Got username $username"
 
     my $role = $self->role() || '';
+    my $mode = $self->mode();
     my $digest;
 
     # check account - the handler config has a connector at .user
     # that returns password or password and role for a requested username
     my $userinfo;
-    if (!$role) {
-        $userinfo = CTX('config')->get_hash( [ @{$self->prefix()}, 'user', $username ] );
-        ##! 64: $userinfo
-        $self->logger->trace("Got userinfo for #$username#: " . Dumper $userinfo) if ($self->logger->is_trace);
-        $digest = $userinfo->{digest} || '';
-        delete $userinfo->{digest};
-        $role = $userinfo->{role} || '';
-        delete $userinfo->{role};
-    } else {
-        $digest = CTX('config')->get( [ @{$self->prefix()}, 'user', $username ] );
-        ##! 64: $digest
-    }
+    my $tenants;
+    eval {
+
+        if ($mode eq 'hash' || !$role) {
+            $userinfo = CTX('config')->get_hash( [ @{$self->prefix()}, 'user', $username ] );
+            ##! 64: $userinfo
+            $self->logger->trace("Got userinfo for #$username#: " . Dumper $userinfo) if ($self->logger->is_trace);
+            $digest = $userinfo->{digest} || '';
+            delete $userinfo->{digest};
+            # use role only if no static role is set
+            if (!$role) {
+                $role = $userinfo->{role};
+            }
+            delete $userinfo->{role};
+            $tenants = $userinfo->{tenant};
+            delete $userinfo->{tenant};
+        } else {
+            $digest = CTX('config')->get( [ @{$self->prefix()}, 'user', $username ] );
+            ##! 64: $digest
+        }
+
+    };
+    return OpenXPKI::Server::Authentication::Handle->new(
+        username => $username,
+        error => OpenXPKI::Server::Authentication::Handle::SERVICE_UNAVAILABLE,
+        error_message => "$EVAL_ERROR"
+    ) if ($EVAL_ERROR);
 
     return OpenXPKI::Server::Authentication::Handle->new(
         error => OpenXPKI::Server::Authentication::Handle::USER_UNKNOWN,
@@ -63,10 +86,12 @@ sub handleInput {
 
     return OpenXPKI::Server::Authentication::Handle->new(
         username => $username,
-        userid => $username,
+        userid => $self->get_userid( $username ),
         role => $role,
         userinfo => $userinfo || {},
+        $tenants ? (tenants => $tenants) : (),
     );
+
 }
 
 1;
@@ -79,19 +104,33 @@ __END__
 Passphrase based authentication against a given user database. The users
 must be provided as a key/value list where the key is equal to the
 username that is passed to the handler.
+The value depends on the chosen mode of operation:
 
-If you have set a static default role via the I<role> parameter, the user
-source must return a scalar that contains the hashed password in a format
-that is understod by C<OpenXPKI::Password::check>.
+=over
 
-If no role is set, the source must return a key value list with the keys
-I<role> and I<digest>. Additional parameters are set as I<userinfo>.
+=item static role, no user information
 
-SCHEME is one of sha (SHA1), md5 (MD5), crypt (Unix crypt), smd5 (salted
-MD5) or ssha (salted SHA1).
+I<mode> must be I<digest> (default) and I<role> must be set. The value
+must be a scalar that represents the hashed password in a format that
+is understod by C<OpenXPKI::Password::check>. If the password matches,
+the user is logged in with the given static role. I<userinfo> remains
+empty.
 
-If you add the I<role> parameter to the config, the configuration must return
-a scalar value for each username representing the digest.
+=item static role, with user information
+
+I<mode> must be I<hash> (default) and I<role> must be set. The user
+source must at least return a hash with the key I<digest> holding the
+password. The user is logged in with the given role, I<tenant> is set
+if present, all other keys, except for I<role> which is deleted unused,
+are returned as I<userinfo>.
+
+=item dynamic role with optional information
+
+I<role> must be empty, same as above but the role is read from the key
+I<role> from the result. If the result does not have a non-empty value
+the login fails.
+
+=back
 
 =head2 Login Parameters
 

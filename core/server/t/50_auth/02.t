@@ -26,7 +26,7 @@ use OpenXPKI::Server::Context qw( CTX );
 
 use OpenXPKI::Server::Authentication;
 
-plan tests => 18;
+plan tests => 29;
 
 my $ot = OpenXPKI::Test->new(
     with => "AuthLayer",
@@ -39,73 +39,115 @@ use_ok "OpenXPKI::Server::Authentication";
 my $auth;
 lives_ok { $auth = OpenXPKI::Server::Authentication->new(); } "class loaded";
 
-my @res = $auth->login_step({
-    STACK => 'Testing',
-    MESSAGE => { PARAMS => {} }
-});
-ok ($res[0], 'Anonymous');
-use Data::Dumper;
-print Dumper \@res;
-@res = $auth->login_step({
-    STACK => 'Password',
-    MESSAGE => { PARAMS => {} }
-});
+my $res;
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Testing',
+        MESSAGE => { PARAMS => {} }
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'Anonymous');
+};
+
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Password',
+        MESSAGE => { PARAMS => {} }
+    });
+    cmp_deeply($res, { 'type' => 'passwd', params => {} });
+};
 
 note 'Fallthru';
 
-is_deeply($res[2], { 'SERVICE_MSG' => 'GET_PASSWD_LOGIN', PARAMS=> {} });
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'FallThru',
+        MESSAGE => { PARAMS => { username => 'foo' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'foo');
+    is($res->role, 'Anonymous');
+};
 
-@res = $auth->login_step({
-    STACK => 'FallThru',
-    MESSAGE => { PARAMS => { username => 'foo' } },
-});
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'FallThru',
+        MESSAGE => { PARAMS => { username => 'foo', password => 'wrongsecret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'foo');
+    is($res->role, 'Anonymous');
+};
 
-is_deeply($res[2], { 'SERVICE_MSG' => 'SERVICE_READY' });
-is($res[0], 'foo');
-is($res[1], 'Anonymous');
-
-@res = $auth->login_step({
-    STACK => 'FallThru',
-    MESSAGE => { PARAMS => { username => 'foo', password => 'wrongsecret' } },
-});
-
-is_deeply($res[2], { 'SERVICE_MSG' => 'SERVICE_READY' });
-is($res[0], 'foo');
-is($res[1], 'Anonymous');
-
-@res = $auth->login_step({
-    STACK => 'FallThru',
-    MESSAGE => { PARAMS => { username => 'foo', password => 'secret' } },
-});
-
-is_deeply($res[2], { 'SERVICE_MSG' => 'SERVICE_READY' });
-is($res[0], 'foo');
-is($res[1], 'User');
-
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'FallThru',
+        MESSAGE => { PARAMS => { username => 'foo', password => 'secret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'foo');
+    is($res->role, 'User');
+};
 
 note 'Password only';
 
-@res = $auth->login_step({
-    STACK => 'Password',
-    MESSAGE => { PARAMS => { username => 'foo' } },
-});
-is_deeply($res[2], { 'SERVICE_MSG' => 'GET_PASSWD_LOGIN', PARAMS=> {} });
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Password',
+        MESSAGE => { PARAMS => { username => 'foo' } },
+    });
+    cmp_deeply($res, { 'type' => 'passwd', params => {} });
+};
 
 throws_ok {
-    @res = $auth->login_step({
+    $res = $auth->login_step({
         STACK => 'Password',
         MESSAGE => { PARAMS => { username => 'foo', password => 'wrongsecret' } },
     });
 } qr/I18N_OPENXPKI_UI_AUTHENTICATION_FAILED/, "wrong secret";
 
-@res = $auth->login_step({
-    STACK => 'Password',
-    MESSAGE => { PARAMS => { username => 'foo', password => 'secret' } },
-});
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Password',
+        MESSAGE => { PARAMS => { username => 'foo', password => 'secret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'foo');
+    is($res->role, 'User');
+};
 
-is_deeply($res[2], { 'SERVICE_MSG' => 'SERVICE_READY' });
-is($res[0], 'foo');
-is($res[1], 'User');
+note 'Password with Tenant';
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Tenant',
+        MESSAGE => { PARAMS => { username => 'foo', password => 'secret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->role, 'User');
+    cmp_deeply($res->tenants, ['Tenant A']);
+};
+
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Tenant',
+        MESSAGE => { PARAMS => { username => 'bar', password => 'secret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->role, 'Operator');
+    ok(!$res->has_tenants());
+};
+
+lives_and {
+    $res = $auth->login_step({
+        STACK => 'Tenant',
+        MESSAGE => { PARAMS => { username => 'guest', password => 'secret' } },
+    });
+    ok(ref $res eq 'OpenXPKI::Server::Authentication::Handle');
+    is($res->userid, 'guest');
+    is($res->role, 'Anonymous');
+    ok(!$res->has_tenants());
+};
+
 
 
 

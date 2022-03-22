@@ -70,15 +70,6 @@ has password => (
     required => 1,
 );
 
-=item * I<auth_stack> (Str) - authentication stack to use (for login)
-
-=cut
-has auth_stack => (
-    is => 'rw',
-    does => 'Str',
-    required => 1,
-);
-
 =back
 
 =head1 METHODS
@@ -125,7 +116,7 @@ sub connect {
                 SOCKETFILE => $self->socket_file,
             })
         );
-    } "create client instance" or BAIL_OUT "Could not create client instance";
+    } "create client instance" or die("Could not create client instance");
 }
 
 =head2 init_session
@@ -196,7 +187,7 @@ sub login {
             plan tests => 4;
         }
 
-        $self->send_ok('GET_AUTHENTICATION_STACK', { AUTHENTICATION_STACK => $self->auth_stack });
+        $self->send_ok('GET_AUTHENTICATION_STACK', { AUTHENTICATION_STACK => 'OxiTestAuthStack' });
         $self->is_next_step("GET_PASSWD_LOGIN");
 
         $self->send_ok('GET_PASSWD_LOGIN', { LOGIN => $user, PASSWD => $self->password });

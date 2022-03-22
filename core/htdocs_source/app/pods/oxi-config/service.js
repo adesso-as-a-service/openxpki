@@ -4,6 +4,12 @@ import ENV from 'openxpki/config/environment';
 import fetch from 'fetch';
 import yaml from 'js-yaml';
 
+/**
+ * Loads the YAML configuration from the backend and makes it available to
+ * the other components.
+ *
+ * @module service/oxi-config
+ */
 export default class OxiConfigService extends Service {
     @tracked localConfig = {};
     ready; // will be set to a Promise that will fulfill if localconfig.yaml is loaded (or server returned error)
@@ -18,7 +24,7 @@ export default class OxiConfigService extends Service {
                 console.debug(`Custom config (YAML):\n${yamlStr}`);
                 if (! yamlStr) return;
                 try {
-                    let doc = yaml.safeLoad(yamlStr); // might be null if YAML is empty string
+                    let doc = yaml.load(yamlStr); // might be null if YAML is empty string
                     if (doc) this.localConfig = doc;
                     console.debug('Custom config (decoded):', this.localConfig);
                 }
@@ -58,16 +64,19 @@ export default class OxiConfigService extends Service {
         });
     }
 
-    _rel2absUrl(relativeUrl) {
+    // Takes the given absolute or relative path and returns a URL
+    _rel2absUrl(path) {
         let baseUrl = window.location.protocol + '//' + window.location.host;
-        // if relativeUrl contains leading slash, treat it as absolute path
-        if (! relativeUrl.match(/^\//)) baseUrl += window.location.pathname;
-        return baseUrl.replace(/\/$/, '') + '/' + relativeUrl.replace(/^\//, '');
 
+        // add current path if given path is relative
+        if (! path.match(/^\//)) baseUrl += window.location.pathname;
+
+        return baseUrl.replace(/\/$/, '') + '/' + path.replace(/^\//, '');
     }
 
     get backendUrl() {
-        let path = this.localConfig.backendPath || '/cgi-bin/webui.fcgi';
+        // default to relative path to support URL-based realms
+        let path = this.localConfig.backendPath || 'cgi-bin/webui.fcgi';
         return this._rel2absUrl(path);
     }
 
@@ -89,5 +98,16 @@ export default class OxiConfigService extends Service {
 
     get footer() {
         return this.localConfig.footer;
+    }
+
+    get pageTitle() {
+        return this.localConfig.pageTitle || 'OpenXPKI - Open Source Trustcenter';
+    }
+
+    get tooltipDelay() {
+        return (this.localConfig.accessibility?.tooltipDelay?.match(/^\s+$/i)
+            ? this.localConfig.accessibility.tooltipDelay
+            : 1000
+        );
     }
 }

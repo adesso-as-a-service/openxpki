@@ -44,7 +44,7 @@ sub driver_ok {
 
         # set all attributes except "user" (and those not comparable as scalars):
         # "user" is left out to test persist/resume for uninitialized attributes
-        for my $name (grep { $_ !~ /^(modified|_secrets|user|is_valid|userinfo|authinfo)$/ } @{ $session->data->get_attribute_names }) {
+        for my $name (grep { $_ !~ /^(modified|_secrets|user|is_valid|userinfo|authinfo|tenants)$/ } @{ $session->data->get_attribute_names }) {
             $session->data->$name(int(rand(2**32-1)));
         }
         $session->data->userinfo({ 'name' => 'John Doe', 'email' => 'john@doe.org' });
@@ -67,7 +67,9 @@ sub driver_ok {
         lives_and {
             my $d1 = $session->data_as_hashref;  delete $d1->{modified};
             my $d2 = $session2->data_as_hashref; delete $d2->{modified};
-            cmp_deeply $d2, $d1;
+            cmp_deeply
+              { %{$d2}, primary_tenant => undef },
+              { %{$d1}, primary_tenant => ignore() };
         } "data is the same after freeze-thaw-cycle";
 
         # make sure session expires

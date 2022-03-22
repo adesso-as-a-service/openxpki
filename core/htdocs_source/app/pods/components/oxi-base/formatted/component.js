@@ -1,5 +1,5 @@
 import Component from '@glimmer/component';
-import moment from "moment-timezone";
+import { DateTime } from 'luxon';
 import { action } from '@ember/object';
 import copy from 'copy-text-to-clipboard';
 
@@ -7,10 +7,9 @@ import copy from 'copy-text-to-clipboard';
  * Shows a formatted piece of text or data.
  *
  * ```html
- * <OxiBase::Formatted @format="timestamp" value="1617102928"/>
+ * <OxiBase::Formatted @format="timestamp" @value="1617102928" @class="big" @truncate={{true}} />
  * ```
  *
- * @module oxi-base/formatted
  * @param { string } format - how the value shall be formatted
  * Possible formats:
  * - `certstatus`
@@ -30,6 +29,7 @@ import copy from 'copy-text-to-clipboard';
  * - `styled`
  * - `tooltip`
  * @param value - value to be formatted - the data type depends on the format
+ * @module component/oxi-base/formatted
  */
 export default class OxiFormattedComponent extends Component {
     get format() {
@@ -46,8 +46,8 @@ export default class OxiFormattedComponent extends Component {
 
     get timestamp() {
         return (this.args.value > 0
-            ? moment.unix(this.args.value).utc().format("YYYY-MM-DD HH:mm:ss UTC")
-            : "---");
+            ? DateTime.fromSeconds(parseInt(this.args.value)).setZone('utc').toFormat('yyyy-MM-dd HH:mm:ss') + ' UTC'
+            : '---');
     }
 
     get styledValue() {

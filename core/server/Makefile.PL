@@ -290,19 +290,19 @@ WriteMakefile(
     'CCFLAGS'   => '-O2 -g '.$Config{ccflags},
     'PREREQ_PM' => {
         'Archive::Zip'                  => 0,
+        'Authen::SASL'                  => 0, # required for Auth in SMTP
         'CGI::Fast'                     => '2.10',
         'CGI::Session'                  => '3.95',
         'CGI'                           => '4.21',
+        'Cache::LRU'                    => 0,
         'Class::Std'                    => '0.0.8',
         'Config::Merge'                 => '1',
         'Config::Std'                   => 0,
-        'Config::Versioned'             => 0,
-        'Connector'                     => '1.32',
+        'Connector'                     => '1.43',
         'Crypt::Argon2'                 => 0,
         'Crypt::CBC'                    => '2.29',
         'Crypt::OpenSSL::AES'           => '0.02',      # e.g. OpenXPKI::Crypto::VolatileVault
-        'CryptX'                        => '0.068',     # Crypt::* modules for key checking
-        'Crypt::Cipher::AES'            => 0,           # replacement to support keysize > 128
+        'CryptX'                        => '0.068',     # Crypt::* modules for key checking, Ciphers for Crypt::CBC
         'Crypt::JWT'                    => 0,
         'Crypt::PKCS10'                 => '2.000',
         'Crypt::Rijndael'               => '1.13',      # OpenXPKI::Crypto::Secret::SplitEncrypted, via Crypt::CBC
@@ -320,6 +320,7 @@ WriteMakefile(
         'Devel::NYTProf'                => 0,           # CPAN
         'English'                       => '1',         # for broken Perl installations like on Ubuntu Drapper
         'Exception::Class'              => '1.22',
+        'File::Which'                   => '1.27',      # docker-test.pl
         'HTML::Entities'                => 0,
         'IO::Prompt'                    => '0.099004',  # for deployment tools
         'JSON'                          => 0,
@@ -344,8 +345,6 @@ WriteMakefile(
         'Proc::ProcessTable'            => '0.43',
         'Proc::SafeExec'                => '1.4',
         'Regexp::Common'                => '2',
-        ## 'RT::Client::REST::Ticket'      => '0', CURRENTLY OPTIONAL
-        ## 'RT::Client::REST'              => '0', CURRENTLY OPTIONAL
         'SOAP::Lite'                    => 0,
         'SQL::Abstract::More'           => '1.28',      # OpenXPKI::Server::Database
         'Sub::Exporter'                 => 0,           # OpenXPKI::MooseParams
@@ -359,7 +358,6 @@ WriteMakefile(
         'Try::Tiny'                     => '0.28',
         'URI::Escape'                   => 0,           # should be part of the core modules but who knows
         'Workflow'                      => '0.27',
-        'XML::Simple'                   => '1',
         'YAML::Tiny'                    => '1.69',
     },
     'test' => {

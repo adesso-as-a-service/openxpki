@@ -122,9 +122,7 @@ command "get_cert" => {
     }
 
     # Hex Serial
-    my $serial = Math::BigInt->new($cert->{cert_key});
-    $cert->{cert_key_hex} = $serial->as_hex;
-    $cert->{cert_key_hex} =~ s{\A 0x}{}xms;
+    $cert->{cert_key_hex} = unpack('H*', Math::BigInt->new($cert->{cert_key})->to_bytes );
 
     # Expired Status
     $cert->{status} = 'EXPIRED' if $cert->{status} eq 'ISSUED' and $cert->{notafter} < time();
@@ -133,9 +131,13 @@ command "get_cert" => {
     if ($format eq 'DBINFO') {
         ##! 2: "Preparing output for DBINFO format"
         delete $cert->{data};
-
+        # TODO -  add tenant filter
         if ($params->has_attribute) {
-            $cert->{cert_attributes} = $self->api->get_cert_attributes( identifier => $identifier, attribute => $params->attribute );
+            $cert->{cert_attributes} = $self->api->get_cert_attributes(
+                identifier => $identifier,
+                attribute => $params->attribute,
+                tenant => '',
+            );
         }
 
         return $cert;

@@ -1,9 +1,8 @@
 import Component from '@glimmer/component';
 import { action } from "@ember/object";
 import { tracked } from '@glimmer/tracking';
-import { getOwner } from '@ember/application';
 import { isArray } from '@ember/array';
-import { inject as service } from '@ember/service';
+import { inject } from '@ember/service';
 import { debug } from '@ember/debug';
 
 class Field {
@@ -19,7 +18,8 @@ class Field {
     tooltip;
     placeholder;
     actionOnChange;
-    @tracked error;
+    @tracked _error; // client-side error state
+    autofill;
     /*
      * Clonable fields
      */
@@ -49,6 +49,15 @@ class Field {
      * oxisection/form/field/static
      */
     verbose;
+    /*
+     * oxisection/form/field/text
+     */
+    autocomplete_query;
+    /*
+     * oxisection/form/field/textarea
+     */
+    rows;
+    allow_upload;
 
     static fromHash(sourceHash) {
         let instance = new this(); // "this" in static methods refers to class
@@ -86,16 +95,17 @@ class Field {
 /**
  * Draws a form.
  *
- * @module oxi-section/form
  * @param { hash } def - section definition
  * ```javascript
  * {
  *     ... // TODO
  * }
  * ```
+ * @module component/oxi-section/form
  */
 export default class OxiSectionFormComponent extends Component {
-    @service('intl') intl;
+    @inject('intl') intl;
+    @inject('oxi-content') content;
 
     @tracked loading = false;
     @tracked fields = [];
@@ -103,6 +113,10 @@ export default class OxiSectionFormComponent extends Component {
     clonableRefNames = [];
     focusFeedback = {}; // gets filled with the field feedback if they may receive the focus
     initialFocussingDone = false;
+
+    hiddenFieldFilter(f) {
+        return f.type !== "hidden" && f.type !== "encrypted";
+    }
 
     constructor() {
         super(...arguments);
@@ -119,6 +133,7 @@ export default class OxiSectionFormComponent extends Component {
             // dynamic input fields will change the form field name depending on the
             // selected option, so we need an internal reference to the original name ("_refName")
             field._refName = field.name;
+
             // set placeholder
             if (typeof field.placeholder === "undefined") {
                 field.placeholder = "";
@@ -154,7 +169,7 @@ export default class OxiSectionFormComponent extends Component {
             if (field.value) {
                 // dynamic input fields: presets are key/value hashes.
                 // we need to convert `value: { key: NAME, value: VALUE }` to `name: NAME, value: VALUE`
-                if (typeof field.value === "object") {
+                if (typeof field.value === 'object' && field.value.key) {
                     field.name = field.value.key;
                     field.value = field.value.value;
                 }
@@ -192,7 +207,7 @@ export default class OxiSectionFormComponent extends Component {
     }
 
     get visibleFields() {
-        return this.fields.filter(f => f.type !== "hidden");
+        return this.fields.filter(this.hiddenFieldFilter);
     }
 
     @action
@@ -214,24 +229,43 @@ export default class OxiSectionFormComponent extends Component {
         this._updateCloneFields();
     }
 
-    // Turns all (non-empty) fields into request parameters
-    _fields2request(includeEmpty) {
-        let result = [];
+    // Turns all (non-empty) fields into request parameters (returns an Object)
+    _encodeAllFields({ includeEmpty = false }) {
+        return this._encodeFields({
+            includeEmpty,
+            fieldNames: this.uniqueFieldNames,
+        });
+    }
 
-        for (const name of this.uniqueFieldNames) {
-            var newName = name;
+    _fromEntries(iterable) {
+        return [...iterable].reduce((obj, [key, val]) => {
+            obj[key] = val;
+            return obj;
+        }, {});
+    }
+
+    _encodeFields({ fieldNames, includeEmpty = false, renameMap = new Map() }) {
+        let result = new Map();
+
+        for (const name of fieldNames) {
+            var newName = renameMap.has(name) ? renameMap.get(name) : name;
 
             // send clonables as list (even if there's only one field) and other fields as plain values
             let potentialClones = this.fields.filter(f =>
                 f.name === name && (typeof f.value !== 'undefined') && (f.value !== "" || includeEmpty)
             );
 
-            if (potentialClones.length === 0) continue;
+            if (potentialClones.length === 0) continue; // there's not even one field to send
+
+            if (potentialClones[0].type == 'encrypted') {
+                // prefix triggers auto-decryption in the backend
+                newName = '_encrypted_jwt_' + newName;
+            }
 
             // encode ArrayBuffer as Base64 and change field name as a flag
             let encodeValue = (val) => {
                 if (val instanceof ArrayBuffer) {
-                    newName = `_encoded_base64_${name}`;
+                    newName = `_encoded_base64_${newName}`;
                     return btoa(String.fromCharCode(...new Uint8Array(val)));
                 }
                 else {
@@ -243,35 +277,36 @@ export default class OxiSectionFormComponent extends Component {
                 ? potentialClones.map(c => encodeValue(c.value))    // array for clonable fields
                 : encodeValue(potentialClones[0].value)             // or plain value otherwise
             // setting 'result' must be separate step as encodeValue() modifies 'newName'
-            result[newName] = value;
+            result.set(newName, value);
 
-            debug(`${name} = ${ potentialClones[0].clonable ? `[${result[newName]}]` : `"${result[newName]}"` }`);
+            debug(`${name} = ${ potentialClones[0].clonable ? `[${value}]` : `"${value}"` }`);
         }
-        return result;
+        return this._fromEntries(result); // FIXME: once we drop IE11 support replace with: return Object.fromEntries(result);
     }
 
     /**
      * @param field { hash } - field definition (gets passed in via this components' template, i.e. is a reference to this components' "model")
+     * @param value { string } - the field's new value
      */
     @action
     setFieldValue(field, value) {
         debug(`oxi-section/form (${this.args.def.action}): setFieldValue (${field.name} = "${value}")`);
         field.value = value;
-        if (field.error) field.error = null;
+        if (value !== undefined && value !== '') this.setFieldError(field, '');
 
         // action on change?
-        if (!field.actionOnChange) { return }
+        if (!field.actionOnChange) { return Promise.resolve() }
 
         debug(`oxi-section/form (${this.args.def.action}): executing actionOnChange ("${field.actionOnChange}")`);
         let request = {
             action: field.actionOnChange,
             _sourceField: field.name,
-            ...this._fields2request(true),
+            ...this._encodeAllFields({ includeEmpty: true }),
         };
 
         let fields = this.fields;
 
-        return getOwner(this).lookup("route:openxpki").sendAjax(request, true)
+        return this.content.updateRequest(request, true)
         .then((doc) => {
             for (const newField of this._prepareFields(doc.fields)) {
                 for (const oldField of fields) {
@@ -301,11 +336,26 @@ export default class OxiSectionFormComponent extends Component {
     @action
     setFieldError(field, message) {
         debug(`oxi-section/form (${this.args.def.action}): setFieldError (${field.name} = ${message})`);
-        field.error = message;
+        field._error = message;
+        let domElement = this.focusFeedback[field._refName];
+        if (domElement) {
+            domElement.setCustomValidity(message);
+        }
+    }
+
+    /**
+     * @param fieldNames { array } - the list of field names to encode
+     * @param renameMap { Map } - optional mappings: source field name => target field name
+     */
+    @action
+    encodeFields(fieldNames, renameMap) {
+        debug(`oxi-section/form (${this.args.def.action}): encodeFields ()`);
+
+        return this._encodeFields({ fieldNames, renameMap, includeEmpty: true });
     }
 
     get originalFieldCount() {
-        return this.args.def.fields.filter(f => f.type !== "hidden").length;
+        return this.args.def.fields.filter(this.hiddenFieldFilter).length;
     }
 
     /*
@@ -376,35 +426,34 @@ export default class OxiSectionFormComponent extends Component {
         debug(`oxi-section/form (${this.args.def.action}): submit`);
 
         // check validity and gather form data
-        let isError = false;
         for (const field of this.fields) {
             if (!field.is_optional && !field.value) {
-                isError = true;
-                field.error = this.intl.t('component.oxisection_form.missing_value');
+                this.setFieldError(field, this.intl.t('component.oxisection_form.missing_value'));
+                return;
             } else {
-                if (field.error) {
-                    isError = true;
-                }
+                // previously detected error (client- or server-side)?
+                if (field._error) return;
             }
         }
-        if (isError) { return }
 
         let request = {
             action: this.args.def.action,
-            ...this._fields2request(false),
+            ...this._encodeAllFields({ includeEmpty: false }),
         };
 
         this.loading = true;
-        return getOwner(this).lookup("route:openxpki").sendAjax(request)
+        return this.content.updateRequest(request)
         .then((res) => {
             this.loading = false;
-            if (res.status != null && res.status.field_errors !== undefined) {
+            if (res?.status?.field_errors !== undefined) {
                 for (const faultyField of res.status.field_errors) {
                     let clones = this.fields.filter(f => f.name === faultyField.name);
                     if (typeof faultyField.index === "undefined") {
-                        clones.setEach("error", faultyField.error);
+                        for (const clone of clones) {
+                            this.setFieldError(clone, faultyField.error);
+                        }
                     } else {
-                        clones[faultyField.index].error = faultyField.error;
+                        this.setFieldError(clones[faultyField.index], faultyField.error);
                     }
                 }
             }

@@ -45,10 +45,6 @@ sub sqlam_params {
     sql_dialect => 'Oracle',
 };
 
-################################################################################
-# required by OpenXPKI::Server::Database::Role::Driver
-#
-
 sub sequence_create_query {
     my ($self, $dbi, $seq) = @_;
     return OpenXPKI::Server::Database::Query->new(
@@ -82,6 +78,15 @@ sub count_rows {
     my $sth = $dbi->run($query);
     return $sth->fetchrow_hashref->{amount};
 }
+
+sub do_sql_replacements {
+    my ($self, $sql) = @_;
+
+    $sql =~ s{from_unixtime \s* \( \s* ( [^\)]+ ) \)}{TO_DATE\('19700101','YYYYMMDD'\) + \(1/86400\) * $1}gmsxi;
+
+    return $sql;
+}
+
 
 ################################################################################
 # required by OpenXPKI::Server::Database::Role::SequenceSupport

@@ -20,9 +20,10 @@ sub execute {
 
     # reset the context flags
     $context->param('signer_trusted' => 0);
-    $context->param('signer_authorized' => 0);
+    $context->param('signer_authorized' => undef);
     $context->param('signer_revoked' => 0);
     $context->param('signer_validity_ok' => 0);
+    $context->param('signer_chain_ok' => undef);
     $context->param('signer_in_current_realm' => 0);
     $context->param('signer_cert_identifier' => undef );
 
@@ -84,12 +85,28 @@ sub execute {
         $context->param('signer_validity_ok' => '0');
     }
 
+    # populate some details on the cert if requested
+    my $signer_subject = $x509->get_subject();
+    if ($self->param('export_subject')) {
+        $context->param( 'signer_subject' => $signer_subject );
+    }
+
+    if ($self->param('export_key_identifier')) {
+        if ($self->param('export_key_identifier') eq 'hash') {
+            $context->param( 'signer_subject_key_identifier' => $x509->get_public_key_hash() );
+        } elsif ($self->param('export_key_identifier') eq 'both') {
+            $context->param( 'signer_public_key_hash' => $x509->get_public_key_hash());
+            $context->param( 'signer_subject_key_identifier' => $x509->get_subject_key_id() );
+        } else {
+            $context->param( 'signer_subject_key_identifier' => $x509->get_subject_key_id() );
+        }
+    }
+
     # Check the chain
     # set from either db query or from chain validation
-    my ($signer_issuer, $signer_req_key, $signer_root, $signer_revoked, @signer_chain);
+    my ($signer_issuer, $signer_root, $signer_revoked, @signer_chain);
     my $signer_realm = 'unknown';
     my $signer_profile = 'unknown';
-
 
     if ($cert_hash) {
         ##! 16: 'certificate found in database'
@@ -97,19 +114,12 @@ sub execute {
         $context->param('signer_cert_identifier' => $signer_identifier);
         $signer_realm = $cert_hash->{pki_realm} || '_global';
         $signer_issuer = $cert_hash->{issuer_identifier};
-        $signer_req_key = $cert_hash->{req_key};
         $signer_revoked = ($cert_hash->{status} ne 'ISSUED');
 
         # Get the profile of the certificate, if it was issued from this CA
-
-        if ($signer_req_key) {
-            my $csr_hash = CTX('dbi')->select_one(
-                from    => 'csr',
-                columns => [ 'profile' ],
-                where   => { req_key => $signer_req_key },
-            );
-            $signer_profile = $csr_hash->{profile} if $csr_hash->{profile};
-
+        if ($cert_hash->{req_key}) {
+            my $profile = CTX('api2')->get_profile_for_cert( identifier => $signer_identifier );
+            $signer_profile = $profile if ($profile);
             if ( $current_realm eq $signer_realm ) {
                 $context->param('signer_in_current_realm' => 1 );
             }
@@ -134,12 +144,10 @@ sub execute {
             crl_check => $crl_check,
         );
 
-        my $cert_status = $chain_validate->{status} || '';
-        if (!$cert_status ) {
-            ##! 32: 'chain validation died'
-            CTX('log')->application()->warn("Unable to build chain for external certificate");
-        } else {
-            ##! 32: 'chain validation status ' . $chain_validate->{status}
+        my $cert_status = $chain_validate->{status};
+        ##! 32: 'chain validation status ' . $cert_status
+        if ($cert_status =~ m{(VALID|REVOKED|NOROOT)}) {
+
             @signer_chain = @{$chain_validate->{chain}};
             # remove the entity from the chain
             shift @signer_chain;
@@ -150,12 +158,20 @@ sub execute {
             if ($cert_status ne 'NOROOT') {
                 my $signer_root_pem = pop @{$chain_validate->{chain}};
                 $signer_root = CTX('api2')->get_cert_identifier( cert => $signer_root_pem );
+                $context->param('signer_chain_ok' => 1);
             }
             # not implemented for remote certificates yet!
             $signer_revoked = ($cert_status eq 'REVOKED');
 
             CTX('log')->application()->debug("Chain validation result is $cert_status");
+
+        }  else {
+
+            ##! 32: 'chain broken or untrusted'
+            $context->param('signer_chain_ok' => 0);
+            CTX('log')->application()->warn("Chain validation was not successful");
         }
+
     }
 
     ##! 32: 'Signer profile ' .$signer_profile
@@ -164,39 +180,36 @@ sub execute {
     ##! 32: 'Signer root ' . ($signer_root || 'unknown')
 
     if ($signer_revoked) {
+        ##! 64: 'Signer is revoked'
         CTX('log')->application()->warn("Trusted Signer certificate is revoked");
         $context->param('signer_revoked' => 1);
 
     } elsif ($signer_root) {
-
+        ##! 64: 'Signer is trusted'
         $context->param('signer_trusted' => 1);
-
         CTX('log')->application()->info("Trusted Signer chain validated - trusted root is $signer_root");
 
     } elsif ($x509->is_selfsigned()) {
-
+        ##! 64: 'Signer is selfsigned'
         $context->param('signer_cert_identifier' => '');
-
         CTX('log')->application()->info("Trusted Signer chain - certificate is self signed");
 
-    } else {
-        CTX('log')->application()->warn("Trusted Signer chain validation FAILED");
+    # something went really wrong, the certificate might be forged or is
+    # not from a trusted source so it does - usually - not make sense to
+    # continue but sometimes you might want to....
+    } elsif ($self->param('allow_untrusted_signer')) {
+        ##! 64: 'continue with untrusted signer'
+        CTX('log')->application()->info("Chain validation failed but allow_untrusted_signer is set");
 
+    } else {
+        ##! 64: 'untrusted signer, aborting'
+        CTX('log')->application()->warn("Trusted Signer chain validation FAILED - aborting");
+        return;
     }
 
     # End chain validation, now check the authorization
 
-    my $signer_subject = $x509->get_subject();
     ##! 32: 'Check signer '.$signer_subject.' against trustlist'
-
-    if ($self->param('export_subject')) {
-        $context->param( 'signer_subject' => $signer_subject );
-    }
-
-    if ($self->param('export_key_identifier')) {
-        $context->param( 'signer_subject_key_identifier' => $x509->get_subject_key_id() );
-    }
-
     my $rules = $self->param('rules');
     # explicit declaration as action parameter
     my @rules;
@@ -209,91 +222,39 @@ sub execute {
         CTX('log')->application()->debug("SignerTrust loading rules from $rules");
     }
 
+    if (!@rules) {
+        CTX('log')->application()->info("No rules were found - skip signer authorization check.");
+        return 1;
+    }
+
     my $matched = 0;
 
     CTX('log')->application()->debug("Trusted Signer Authorization $signer_profile / $signer_realm / $signer_subject / $signer_identifier");
 
-    my $meta;
-
     TRUST_RULE:
     foreach my $rule (@rules) {
         ##! 32: 'Testing rule ' . $rule
-        my $trustrule  = (ref $rules eq 'HASH') ? $rules->{$rule}
+        my $trustrule = (ref $rules eq 'HASH') ? $rules->{$rule}
             : $config->get_hash("$rules.$rule");
 
         # as we expect the idenifier to be uniq we do not need a realm
         $trustrule->{realm} = $current_realm
             if (!$trustrule->{realm} && !$trustrule->{identifier});
 
-        $matched = 0;
-        foreach my $key (keys %{$trustrule}) {
-            my $match = $trustrule->{$key};
-            ##! 64: 'expected match ' . $key . '/' . $match
-            if ($key eq 'subject') {
-                $matched = ($signer_subject =~ /^$match$/i);
-
-            } elsif ($key eq 'identifier') {
-                $matched = ($signer_identifier eq $match);
-
-            } elsif ($key eq 'realm') {
-                # if issuer_alias is used the realm check is done on the alias
-                $matched = ($trustrule->{issuer_alias}) ? 1 :
-                    ($signer_realm eq $match || $match eq '_any');
-
-            } elsif ($key eq 'profile') {
-                $matched = ($signer_profile eq $match);
-
-            } elsif ($key eq 'issuer_alias' || $key eq 'root_alias') {
-
-                my $identifier = ($key eq 'issuer_alias') ? $signer_issuer : $signer_root;
-                my $alias = CTX('dbi')->select_one(
-                    from    => 'aliases',
-                    columns => [ 'alias' ],
-                    where   => {
-                        group_id => $match,
-                        identifier => $identifier,
-                        notbefore => { '<' => time },
-                        notafter  => { '>' => time },
-                        pki_realm => [ $trustrule->{realm}, '_global' ],
-                    },
-                );
-                ##! 64: "Result for $key ($identifier) in $match: " . ($alias->{alias} || 'no result')
-                $matched = (defined $alias->{alias});
-
-            } elsif ($key =~ m{meta_}) {
-                # reset the matched state!
-                $matched = 0;
-                if (!defined $meta->{$key}) {
-                    my $attr = CTX('api2')->get_cert_attributes(
-                        identifier => $signer_identifier,
-                        attribute => $key
-                    );
-                    $meta->{$key} = $attr->{$key} || [];
-                    ##! 64: 'Loaded attr ' . Dumper $meta->{$key}
-                }
-                foreach my $aa (@{$meta->{$key}}) {
-                    ##! 64: "Attr $aa"
-                    next unless ($aa eq $match);
-                    $matched = 1;
-                    last;
-                }
-
-            } else {
-                CTX('log')->system()->error("Trusted Signer Authorization unknown ruleset $key/$match");
-
-                $matched = 0;
-            }
-            next TRUST_RULE if (!$matched);
-
-            CTX('log')->application()->debug("Trusted Signer Authorization matched subrule $rule/$match");
-
-            ##! 32: 'Matched ' . $match
-        }
+        ##! 64: $trustrule
+        my $matched = CTX('api2')->evaluate_trust_rule(
+            signer_subject  => $signer_subject,
+            signer_identifier   => $signer_identifier,
+            signer_realm    => $signer_realm,
+            ($signer_profile ? (signer_profile  => $signer_profile) : ()),
+            ($signer_issuer  ? (signer_issuer   => $signer_issuer) : ()),
+            ($signer_root    ? (signer_root     => $signer_root) : ()),
+            rule            => $trustrule,
+        );
 
         if ($matched) {
             ##! 16: 'Passed validation rule #'.$rule,
             CTX('log')->application()->info("Trusted Signer Authorization matched rule $rule");
-
             $context->param('signer_authorized' => 1);
             return 1;
         }
@@ -320,9 +281,12 @@ OpenXPKI::Server::Workflow::Activity::Tools::EvaluateSignerTrust
 =head1 DESCRIPTION
 
 Evaluate if the signer certificate can be trusted. Populates the result
-into several context items, all values are boolean. Checks are based on
-the contents of the certificate database, so if you want to use external
-certificates with this class you need to import them first.
+into several context items, all values are boolean. Checks are by default
+done based on the contents of the certificate database and work only for
+certificates which are found there. If you want to validate certificates
+from an external CA you must import the full issuer chain and either set
+the I<allow_external_signer> flag or import the used signer certificates
+themselves.
 
 =over
 
@@ -336,7 +300,8 @@ revoked. Does B<NOT> check for expiration.
 true if the signer matches one of the given rules. This does B<NOT> depend
 on the trust status of the certificate, so you need to check both flags or
 delegate the chain validation to another component (e.g. tls config of
-webserver).
+webserver). Will be I<undef> in case the certificate chain could not be
+validated at all or no trust rules have been found.
 
 =item signer_validity_ok
 
@@ -345,6 +310,11 @@ true if the current date is within the notbefore/notafter window
 =item signer_revoked
 
 true if the certificate is marked revoked.
+
+=item signer_chain_ok
+
+only available with external signers, true if the certificate chain
+was successfully build, false otherwise.
 
 =item signer_cert_identifier
 
@@ -355,10 +325,10 @@ the identifier of the signer certificate
 the subject of the signer certificate,
 only exported if export_subject parameter is set
 
-=item signer_subject_key_identifier
+=item signer_subject_key_identifier, signer_public_key_hash
 
-the signer_key_identifier of the signer certificate,
-only exported if export_key_identifier parameter is set
+the signer_key_identifier / public_key_hash of the signer
+certificate, see export_key_identifier parameter for details.
 
 =item signer_in_current_realm
 
@@ -458,13 +428,28 @@ Boolean, if set the signer_subject is exported to the context.
 
 =item export_key_identifier
 
-Boolean, if set the signer_subject_key_identifier is exported to the context.
+Export information about the signers subject_key_identifier. As there is
+an ambiguity on this term, you can switch the behaviour.
+
+The default behaviour on any true value is to write the key identifier
+read from the certificate to  I<signer_subject_key_identifier>. If you
+pass I<hash>, you get the value of the SHA1 hash of the public key as
+defined in RFC5280 in this field. If you pass I<both>, the SHA1 has will
+be written as an additional field to I<signer_public_key_hash>.
+
+B<Note>: If a certificate does not contain an explicit subject key
+identifier, this always falls back to the SHA1 hash.
 
 =item allow_external_signer
 
 Boolean, if set and the signer is not found in the local database the activity
 tries to verify the certificate chain using the validate_certificate API
 method.
+
+=item allow_untrusted_signer
+
+Boolean, if true, the rulesets are processed even if the certificate chain
+could not be built or validated. This is only useful with external signers.
 
 =item crl_check
 

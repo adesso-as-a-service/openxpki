@@ -24,33 +24,23 @@ sub execute {
 
     my $config = CTX('config');
 
-    my $group_name;
-
+    my %args;
     # get group name from type
     if ($self->param('token')) {
-        # Determine the name of the key group for cert signing
-        $group_name = $config->get(['crypto','type', $self->param('token') ]);
-        if (!$group_name) {
-            workflow_error( "I18N_OPENXPKI_SERVER_WORKFLOW_ACTIVITY_LIST_ACTIVE_TOKEN_NO_GROUP_FOUND_FOR_TYPE",
-                     { TOKEN => $self->param('token') } );
-        }
+        $args{type} = $self->param('token');
 
     # explicit group name
-    } elsif ($self->param('group')) {
-        $group_name = $self->param('group');
+    } elsif ($self->param('alias_group')) {
+        $args{group} = $self->param('alias_group');
 
     # oops
     } else {
-        configuration_error( 'I18N_OPENXPKI_SERVER_WORKFLOW_ACTIVITY_LIST_ACTIVE_TOKEN_NO_GROUP_OR_TYPE_GIVEN' );
+        configuration_error 'Neither group nor token type was given';
     }
 
-    my $token_list = CTX('api2')->list_active_aliases( group => $group_name );
-
+    my $token_list = CTX('api2')->list_active_aliases( %args );
     if (!@{$token_list} && !$self->param('empty_ok')) {
-        workflow_error(
-            "I18N_OPENXPKI_SERVER_WORKFLOW_ACTIVITY_LIST_ACTIVE_TOKEN_DID_NOT_FIND_ANY_TOKEN",
-            { GROUP => $group_name }
-        );
+        workflow_error "No active tokens found for " . (values %args)[0];
     }
 
     ##! 32: "Active tokens found " . Dumper $token_list
@@ -72,7 +62,7 @@ OpenXPKI::Server::Workflow::Activity::Tools::ListActiveToken
 =head1 Description
 
 Load the alias names of all active tokens in the given token group (parameter
-I<group>) or with the given token type (paramater I<token>).
+I<alias_group>) or with the given token type (paramater I<token>).
 The list of token names will be in the context with key token_alias_list
 as array, sorted by notbefore data, most current first. The target
 key can be set using the target_key parameter
@@ -90,7 +80,7 @@ parameter is set to a true value.
 
 Name of the token type to look up, e.g. certsign
 
-=item group
+=item alias_group
 
 Name of the group to look up, e.g. ca-signer
 

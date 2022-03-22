@@ -195,7 +195,7 @@ sub _init_transport {
 
     # Net::SMTP returns undef if it can not reach the configured socket
     if (!$transport || !ref $transport) {
-        CTX('log')->system()->fatal(sprintf("Failed creating smtp transport (host: %s, user: %s)", $smtp{Host}, $smtp{User}));
+        CTX('log')->system()->fatal(sprintf("Failed creating smtp transport (host: %s, user: %s)", ($smtp{Host} // 'unset'), ($smtp{User} // 'unset')));
         return undef;
     }
 
@@ -399,7 +399,7 @@ sub notify {
 
             # Receipient
             $pi->{to} = $self->_render_receipient( $cfg->{to}, \%vars );
-            ##! 32: 'Got new rcpt  ' . $pi->{to}
+            ##! 32: 'Got new rcpt ' . $pi->{to}
 
             # CC-Receipient
             my @cclist;
@@ -467,22 +467,36 @@ sub _render_receipient {
 
     ##! 1: 'Start'
     my $self = shift;
-    my $mail = shift;
+    my $template = shift;
     my $vars = shift;
 
-    $mail = $self->_render_template( $mail, $vars );
+    ##! 16: $template
+    ##! 64: $vars
 
-    #  trim whitespace
-    $mail =~ s/\s+//;
-
-    if ($mail !~ /^[\w\.-]+\@[\w\.-]+$/) {
-        ##! 8: 'This is not an address ' . $mail
-        CTX('log')->system()->warn("Not a mail address: $mail");
-
-        return undef;
+    if (!$template) {
+        CTX('log')->system()->warn("No receipient adress or template given");
+        return;
     }
 
-    return $mail;
+    my $rcpt = $self->_render_template( $template, $vars );
+
+    #  trim whitespace
+    $rcpt =~ s/\s+//;
+
+    if (!$rcpt) {
+        CTX('log')->system()->warn("Receipient address is empty after render!");
+        CTX('log')->system()->debug("Template was $template");
+        return;
+    }
+
+    if ($rcpt !~ /^[\w\.-]+\@[\w\.-]+$/) {
+        ##! 8: 'This is not an address ' . $rcpt
+        CTX('log')->system()->warn("Receipient address is not properly formatted: $rcpt");
+        CTX('log')->system()->debug("Template was $template");
+        return;
+    }
+
+    return $rcpt;
 
 }
 

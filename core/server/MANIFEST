@@ -38,9 +38,15 @@ OpenXPKI/VERSION.pm
 ## Client
 OpenXPKI/Client.pm
 OpenXPKI/Client/Config.pm
-OpenXPKI/Client/RPC.pm
 OpenXPKI/Client/SCEP.pm
 OpenXPKI/Client/Simple.pm
+
+# Wrappers for EST, RPC...
+OpenXPKI/Client/Service/Base.pm
+OpenXPKI/Client/Service/RPC.pm
+OpenXPKI/Client/Service/Response.pm
+OpenXPKI/Client/Service/SCEP.pm
+OpenXPKI/Client/Service/Role/PickupWorkflow.pm
 
 # New UI Client
 OpenXPKI/Client/UI.pm
@@ -79,9 +85,12 @@ OpenXPKI/Connector/WorkflowContext.pm
 
 # Wrappers around Crypt::* modules
 OpenXPKI/Crypt/CRL.pm
+OpenXPKI/Crypt/DN.pm
+OpenXPKI/Crypt/PKCS7.pm
 OpenXPKI/Crypt/PKCS10.pm
 OpenXPKI/Crypt/PubKey.pm
 OpenXPKI/Crypt/X509.pm
+OpenXPKI/Crypt/PKCS7/SCEP.pm
 
 ## Crypto layer
 
@@ -146,7 +155,8 @@ OpenXPKI/Crypto/Backend/OpenSSL/Command.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Config.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Engine.pm
 
-OpenXPKI/Crypto/Backend/OpenSSL/Engine/GOST.pm
+OpenXPKI/Crypto/Backend/OpenSSL/Engine/AWSCloudHSM.pm
+OpenXPKI/Crypto/Backend/OpenSSL/Engine/LunaGem.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Engine/nCipher.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Engine/OpenSSL.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Engine/PKCS11.pm
@@ -163,6 +173,7 @@ OpenXPKI/Crypto/Backend/OpenSSL/Command/create_pkcs10.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/create_pkcs12.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/create_pkey.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/create_random.pm
+OpenXPKI/Crypto/Backend/OpenSSL/Command/decrypt_digest.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/get_pkcs8_keytype.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/get_pubkey.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/is_issuer.pm
@@ -176,7 +187,13 @@ OpenXPKI/Crypto/Backend/OpenSSL/Command/pkcs7_get_chain.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/pkcs7_get_payload.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/pkcs7_sign.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/pkcs7_verify.pm
+OpenXPKI/Crypto/Backend/OpenSSL/Command/sign_digest.pm
 OpenXPKI/Crypto/Backend/OpenSSL/Command/verify_cert.pm
+
+# Collection of reusable items as Moose::Role
+OpenXPKI/Role/IssuerSerial.pm
+OpenXPKI/Role/SubjectOID.pm
+OpenXPKI/Role/SubjectAltNameMaps.pm
 
 ## database interface of the server
 
@@ -213,10 +230,15 @@ OpenXPKI/Server/API2/Autoloader.pm
 OpenXPKI/Server/API2/EasyPlugin.pm
 OpenXPKI/Server/API2/EasyPluginMetaClassTrait.pm
 OpenXPKI/Server/API2/EasyPluginRole.pm
+OpenXPKI/Server/API2/TenantRole.pm
+OpenXPKI/Server/API2/PluginRole.pm
+OpenXPKI/Server/API2/Types.pm
+OpenXPKI/Server/API2/Plugin/tenant_handler.pm
 OpenXPKI/Server/API2/Plugin/Api/Util/ModuleFinder.pm
 OpenXPKI/Server/API2/Plugin/Api/Util/PodPOMView.pm
 OpenXPKI/Server/API2/Plugin/Api/api_help.pm
 OpenXPKI/Server/API2/Plugin/Api/api_list.pm
+OpenXPKI/Server/API2/Plugin/Cert/evaluate_trust_rule.pm
 OpenXPKI/Server/API2/Plugin/Cert/get_cert.pm
 OpenXPKI/Server/API2/Plugin/Cert/get_cert_actions.pm
 OpenXPKI/Server/API2/Plugin/Cert/get_cert_attributes.pm
@@ -241,7 +263,8 @@ OpenXPKI/Server/API2/Plugin/Control/purge_application_log.pm
 OpenXPKI/Server/API2/Plugin/Crypto/generate_key.pm
 OpenXPKI/Server/API2/Plugin/Crypto/get_key_identifier_from_data.pm
 OpenXPKI/Server/API2/Plugin/Crypto/get_random.pm
-OpenXPKI/Server/API2/Plugin/Crypto/validate_key_params.pm
+OpenXPKI/Server/API2/Plugin/Crypto/scep_message_handler.pm
+OpenXPKI/Server/API2/Plugin/Crypto/validate_ruleset.pm
 OpenXPKI/Server/API2/Plugin/Crypto/password_quality.pm
 OpenXPKI/Server/API2/Plugin/Crypto/password_quality/CheckEntropyRole.pm
 OpenXPKI/Server/API2/Plugin/Crypto/password_quality/CheckLegacyRole.pm
@@ -299,6 +322,7 @@ OpenXPKI/Server/API2/Plugin/Workflow/create_workflow_instance.pm
 OpenXPKI/Server/API2/Plugin/Workflow/execute_workflow_activity.pm
 OpenXPKI/Server/API2/Plugin/Workflow/check_workflow_acl.pm
 OpenXPKI/Server/API2/Plugin/Workflow/fail_workflow.pm
+OpenXPKI/Server/API2/Plugin/Workflow/reset_workflow.pm
 OpenXPKI/Server/API2/Plugin/Workflow/get_openapi_typespec.pm
 OpenXPKI/Server/API2/Plugin/Workflow/get_rpc_openapi_spec.pm
 OpenXPKI/Server/API2/Plugin/Workflow/get_workflow_activities.pm
@@ -315,8 +339,7 @@ OpenXPKI/Server/API2/Plugin/Workflow/search_workflow_instances.pm
 OpenXPKI/Server/API2/Plugin/Workflow/start_workflow.pm
 OpenXPKI/Server/API2/Plugin/Workflow/wakeup_resume_workflow.pm
 
-OpenXPKI/Server/API2/PluginRole.pm
-OpenXPKI/Server/API2/Types.pm
+
 OpenXPKI/Server/Context.pm
 OpenXPKI/Server/Init.pm
 OpenXPKI/Server/Session.pm
@@ -363,9 +386,9 @@ OpenXPKI/Workflow/Handler.pm
 
 OpenXPKI/Server/Watchdog.pm
 OpenXPKI/Server/Workflow.pm
+OpenXPKI/Server/Workflow/Helpers.pm
 OpenXPKI/Server/Workflow/Pause.pm
 OpenXPKI/Server/Workflow/Stub.pm
-
 
 OpenXPKI/Server/Workflow/WFObject.pm
 OpenXPKI/Server/Workflow/WFObject/WFArray.pm
@@ -426,6 +449,7 @@ OpenXPKI/Server/Workflow/Activity/Tools/ExportToFile.pm
 OpenXPKI/Server/Workflow/Activity/Tools/GenerateKey.pm
 OpenXPKI/Server/Workflow/Activity/Tools/GeneratePassword.pm
 OpenXPKI/Server/Workflow/Activity/Tools/GetCertificateIdentifier.pm
+OpenXPKI/Server/Workflow/Activity/Tools/GetIdentifierForAlias.pm
 OpenXPKI/Server/Workflow/Activity/Tools/GetSystemStatus.pm
 OpenXPKI/Server/Workflow/Activity/Tools/InjectExtraParam.pm
 OpenXPKI/Server/Workflow/Activity/Tools/ListActiveToken.pm
@@ -499,6 +523,7 @@ OpenXPKI/Server/Workflow/Condition/KeyParams.pm
 OpenXPKI/Server/Workflow/Condition/SubjectsMatch.pm
 OpenXPKI/Server/Workflow/Condition/SubjectValid.pm
 OpenXPKI/Server/Workflow/Condition/UserExists.pm
+OpenXPKI/Server/Workflow/Condition/ValidateRuleset.pm
 OpenXPKI/Server/Workflow/Condition/WFArray.pm
 OpenXPKI/Server/Workflow/Condition/WFHash.pm
 OpenXPKI/Server/Workflow/Condition/WorkflowCreator.pm
@@ -587,6 +612,7 @@ bin/openxpkicmd
 
 # cgi stuff
 cgi-bin/scep.fcgi
+cgi-bin/scepv3.fcgi
 cgi-bin/webui.fcgi
 cgi-bin/soap.fcgi
 cgi-bin/download.fcgi
@@ -595,16 +621,24 @@ cgi-bin/est.fcgi
 cgi-bin/healthcheck.fcgi
 
 # Client UI
-htdocs/assets/openxpki.css
-htdocs/assets/openxpki.js
-htdocs/assets/vendor.css
-htdocs/assets/vendor.js
+# NOTE:
+#   core/htdocs_source/update-manifest.pl will update the list below.
+#   UPDATE_MANIFEST_UI_LIST - do not remove this comment
+htdocs/assets/bootstrap-v4-tweaks-ab92eeef543fbc1b09c6c4a88b5d88b3.css
+htdocs/assets/chunk.143.bd3ae25a55c352a00429.js
+htdocs/assets/chunk.178.3055356d88bc79c50467.js
+htdocs/assets/chunk.458.e1af0f4774b5bca829a3.js
+htdocs/assets/chunk.458.e1af0f4774b5bca829a3.js.LICENSE.txt
+htdocs/assets/chunk.958.8cc193dbcfcf30fabc7a.js
+htdocs/assets/chunk.958.8cc193dbcfcf30fabc7a.js.LICENSE.txt
+htdocs/assets/glyphicons-8dfa4dd41b8ab62e14cf32e7dd3756bc.css
+htdocs/assets/openxpki-0541a680bcd394d2ba7eb13c2d57426b.js
+htdocs/assets/openxpki-5cb3d0e370b7904107f7a909bf30f597.css
+htdocs/assets/vendor-4e23e616831af3261a25cbe635fd20d9.js
+htdocs/assets/vendor-67e170cb8fa57fdce6f57b2b245651ad.css
 htdocs/default.html
 htdocs/favicon.png
 htdocs/fonts/glyphicons-halflings-regular.eot
-htdocs/fonts/glyphicons-halflings-regular.svg
-htdocs/fonts/glyphicons-halflings-regular.ttf
-htdocs/fonts/glyphicons-halflings-regular.woff
 htdocs/fonts/glyphicons-halflings-regular.woff2
 htdocs/img/bulk.png
 htdocs/img/certificate-search.png
@@ -617,15 +651,16 @@ htdocs/img/my-tasks.png
 htdocs/img/my-workflows.png
 htdocs/img/reports.png
 htdocs/img/request.png
-htdocs/img/revoke2.png
 htdocs/img/revoke.png
+htdocs/img/revoke2.png
 htdocs/img/system-status-critical.png
 htdocs/img/system-status-major.png
 htdocs/img/system-status-minor.png
 htdocs/img/system-status-ok.png
-htdocs/img/system-status.png
 htdocs/img/system-status-warning.png
+htdocs/img/system-status.png
 htdocs/img/ticket.png
 htdocs/img/transaction-id.png
 htdocs/img/workflow-search.png
+htdocs/index.html
 htdocs/localconfig.yaml.template

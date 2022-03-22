@@ -304,6 +304,25 @@ sub notafter {
 
 }
 
+=head2 cdp
+
+Return the URIs of the CDPs contained in the certificate as arrayref.
+
+=cut
+
+sub cdp {
+
+    my $self = shift;
+    my $cert_id = shift;
+
+    my $pem = $self->pem($cert_id);
+    return unless($pem);
+
+    my $x509 = OpenXPKI::Crypt::X509->new($pem);
+    return $x509->get_cdp();
+
+}
+
 =head2 pki_realm
 
 Return the verbose label of the workflow realm
@@ -334,6 +353,8 @@ sub chain {
     my $self = shift;
     my $cert_id = shift;
 
+    return unless ($cert_id);
+
     my $chain = CTX('api2')->get_chain( start_with => $cert_id, format => 'PEM' );
     my @certs = @{$chain->{certificates}};
 
@@ -357,6 +378,7 @@ sub attr {
     my $cert_id = shift;
     my $attr = shift;
 
+    return unless ($cert_id);
     my $hash = CTX('api2')->get_cert_attributes(
         identifier => $cert_id, attribute => $attr
     );
@@ -379,6 +401,7 @@ sub pem {
     my $self = shift;
     my $cert_id = shift;
 
+    return unless ($cert_id);
     my $pem;
     eval {
         $pem = CTX('api2')->get_cert( identifier => $cert_id, 'format' => 'PEM' );
@@ -397,7 +420,7 @@ sub profile {
 
     my $self = shift;
     my $cert_id = shift;
-
+    return unless ($cert_id);
     my $profile = CTX('api2')->get_profile_for_cert( identifier => $cert_id );
     return $profile || '';
 

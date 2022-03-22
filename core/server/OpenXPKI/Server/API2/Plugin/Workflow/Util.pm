@@ -8,6 +8,7 @@ use Try::Tiny;
 # Project modules
 use OpenXPKI::Server;
 use OpenXPKI::Server::Context qw( CTX );
+use OpenXPKI::Daemonize;
 use OpenXPKI::Connector::WorkflowContext;
 use OpenXPKI::MooseParams;
 use OpenXPKI::Debug;
@@ -103,16 +104,18 @@ B<Positional parameters>
 
 =item * C<$wait> I<Bool> - wait for background execution to start (max. 15 seconds).
 
+=item * C<$role> I<Str> - run as role (implies async)
+
 =back
 
 =cut
 sub execute_activity {
-    my ($self, $wf, $activity, $async, $wait) = @_;
+    my ($self, $wf, $activity, $async, $wait, $role) = @_;
     ##! 2: 'execute activity ' . $activity
 
     # ASYNCHRONOUS - fork
-    if ($async) {
-        $self->_execute_activity_async($wf, $activity); # returns the background process PID
+    if ($async || $wait || $role) { # async marker
+        $self->_execute_activity_async($wf, $activity, $role); # returns the background process PID
         if ($wait) {
             return $self->watch($wf); # wait and fetch updated workflow state
         }
@@ -151,10 +154,10 @@ B<Positional parameters>
 sub _execute_activity_sync {
     my ($self, $workflow, $activity) = @_;
     ##! 4: 'start'
+    ##! 64: 'wf: ' . $workflow->type . ', activity: ' . $activity
 
     my $log = CTX('log')->workflow;
 
-    ##! 64: Dumper $workflow
     OpenXPKI::Server::__set_process_name("workflow: id %d", $workflow->id());
     # run activity
     eval { $self->_run_activity($workflow, $activity) };
@@ -228,12 +231,15 @@ B<Positional parameters>
 
 =item * C<$activity> (Str) - workflow activity
 
+=item * C<$role> (Str) - role to run as
+
 =back
 
 =cut
 sub _execute_activity_async {
-    my ($self, $workflow, $activity) = @_;
+    my ($self, $workflow, $activity, $role) = @_;
     ##! 4: 'start'
+    ##! 64: 'wf: ' . $workflow->type . ', activity: ' . $activity
 
     my $log = CTX('log')->workflow;
 
@@ -245,7 +251,7 @@ sub _execute_activity_async {
 
     # parent process
     if ($pid > 0) {
-        ##! 32: ' Workflow instance succesfully forked with pid ' . $pid
+        ##! 32: 'Workflow instance succesfully forked with pid ' . $pid
         $log->trace("Forked process with PID $pid for workflow execution") if $log->is_trace;
         return $pid;
     }
@@ -255,7 +261,7 @@ sub _execute_activity_async {
 
     # child process
     try {
-        ##! 16: ' Workflow instance succesfully forked - I am the workflow'
+        ##! 16: 'I am the child process running the activity'
         # append fork info to process name
         OpenXPKI::Server::__set_process_name("workflow: id %d (detached)", $workflow->id());
 
@@ -263,11 +269,12 @@ sub _execute_activity_async {
         if (CTX('session')->type ne 'Memory') {
             my $session = OpenXPKI::Server::Session->new(type => "Memory")->create;
             $session->data->user( CTX('session')->data->user );
-            $session->data->role( CTX('session')->data->role );
+            $session->data->role( $role || CTX('session')->data->role );
             $session->data->pki_realm( CTX('session')->data->pki_realm );
 
             OpenXPKI::Server::Context::setcontext({ session => $session, force => 1 });
             Log::Log4perl::MDC->put('sid', substr(CTX('session')->id,0,4));
+            Log::Log4perl::MDC->put('role', $session->data->role );
         }
 
         # run activity
@@ -283,9 +290,10 @@ sub _execute_activity_async {
     };
 
     eval { CTX('dbi')->disconnect };
-
+    CTX('config')->cleanup();
     ##! 16: 'Backgrounded workflow finished - exit child'
     exit;
+
 }
 
 # runs the given workflow activity on the Workflow engine

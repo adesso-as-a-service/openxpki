@@ -42,6 +42,12 @@ sub execute
         return_columns => 'identifier',
     };
 
+    if (defined $self->param('tenant')) {
+        $query->{tenant} = $self->param('tenant');
+    } elsif ($workflow->attrib('tenant')) {
+        $query->{tenant} = $workflow->attrib('tenant');
+    }
+
     if (!$include_revoked) {
         $query->{status} = 'ISSUED';
     };
@@ -154,7 +160,11 @@ sub execute
             my $value = $self->param($key);
             next unless (defined $value && $value ne '');
             ##! 16: 'Add key with value ' . $value
-            $query->{cert_attributes}->{$key} = { '=', $value };
+            if ($value eq '<undef>') {
+                $query->{cert_attributes}->{$key} = undef;
+            } else {
+                $query->{cert_attributes}->{$key} = { '=', $value };
+            }
         }
     }
 
@@ -235,6 +245,11 @@ See the parameter section for available filters.
 
 The realm to search in, default is the current realm, I<_any> searches globally
 
+=item tenant
+
+The tenant to search for, the default is to use the tenant of the
+current workflow.
+
 =item profile
 
 The profile of the certificate, default is all profiles.
@@ -269,6 +284,8 @@ and casing is handled internally)
 =item meta_*, system_*
 
 Lets you search for any certificate attribute having a listed prefix.
+You can set the special value I<<undef>> (including the angle brackets)
+to search for rows without a certain attribute.
 
 =item target_key
 

@@ -50,8 +50,8 @@ sub execute {
         $base_conditions{issuer_identifier} = $issuer;
     }
 
-    my $select_column = 'EXTRACT(YEAR_MONTH FROM (FROM_UNIXTIME(%s)))|ivl';
-    my $group_query = 'MONTH(FROM_UNIXTIME(%s)), YEAR(FROM_UNIXTIME(%1$s))';
+    my $select_column = 'CONCAT(EXTRACT(YEAR FROM FROM_UNIXTIME(%s)),EXTRACT(MONTH FROM FROM_UNIXTIME(%1$s)))|ivl';
+    my $group_query = 'EXTRACT(MONTH FROM FROM_UNIXTIME(%s)), EXTRACT(YEAR FROM FROM_UNIXTIME(%1$s))';
 
     my $db = CTX('dbi');
     my $series;
@@ -63,8 +63,9 @@ sub execute {
     ##! 16: "$offset_year / $offset_month"
     my $get_index = sub {
         my $value = shift;
-        return ((int($value / 100) - $offset_year) * 12)
-             + (($value % 100) - $offset_month);
+        my ($year, $month) = ($value =~ m{(\d{4})(\d+)});
+        return (($year - $offset_year) * 12)
+             + ($month - $offset_month);
     };
 
     my $last_group = $db->select_one(%base_query, columns => [ sprintf($select_column, $stop_at) ]);

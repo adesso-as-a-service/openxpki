@@ -70,6 +70,7 @@ has 'query_builder' => (
     default => sub {
         my $self = shift;
         return OpenXPKI::Server::Database::QueryBuilder->new(
+            driver => $self->driver,
             sqlam => $self->sqlam,
             $self->driver->namespace ? (namespace => $self->driver->namespace) : (),
         );
@@ -131,6 +132,11 @@ has '_txn_starter' => (
 sub _build_driver {
     my $self = shift;
     my %args = %{$self->db_params}; # copy hash
+
+    # Remove undefined value (= empty option in originating config file)
+    for (keys %args) {
+        delete $args{$_} unless defined $args{$_};
+    }
 
     my $driver = $args{type};
     OpenXPKI::Exception->throw (

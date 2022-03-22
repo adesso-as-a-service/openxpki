@@ -71,7 +71,7 @@ sub _create_wf {
         #$workflow = $oxitest->create_workflow($WORKFLOW_TYPE);
         $workflow = CTX('workflow_factory')->get_factory->create_workflow($workflow_type);
         ok ref $workflow;
-    } "Create test workflow" or BAIL_OUT "Could not create workflow";
+    } "Create test workflow" or die("Could not create workflow");
 
     return $workflow;
 }
@@ -160,7 +160,7 @@ my $oxitest = OpenXPKI::Test->new(
 # Tests - legacy
 #
 
-password_ok("v.s.pwd4oxi", $wf_legacy);
+password_ok("vry.s.pwd4oxi", $wf_legacy);
 
 # too less different characters
 password_fails("1!111!aaa!!aa" => qr/I18N_OPENXPKI_UI_PASSWORD_QUALITY_DIFFERENT_CHARS/, $wf_legacy);

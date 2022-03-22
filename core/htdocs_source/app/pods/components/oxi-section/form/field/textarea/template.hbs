@@ -1,9 +1,66 @@
-<textarea
-    class="form-control"
-    rows={{this.rows}}
-    cols={{this.cols}}
-    value={{@content.value}}
-    placeholder={{@content.placeholder}}
-    {{on "input" this.onInput}}
-    {{may-focus this true}}
-/>
+<div class="row">
+    <div class="col-lg-10">
+        <textarea
+            class="form-control"
+            rows={{this.rows}}
+            value={{this.textOutput}}
+            placeholder={{@content.placeholder}}
+            readonly={{if this.lockTextInput "readonly"}}
+            required={{not @content.is_optional}}
+            {{on "keydown" this.onKeydown}}
+            {{on "input" this.onInput}}
+            {{on "drop" this.fileDropped}}
+            {{on "dragover" this.showCopyEffect}}
+            {{may-focus this true}}
+        />
+        <div class="invalid-feedback">{{@error}}</div>
+    </div>
+    <div class="col-lg-2">
+        {{#if @content.allow_upload}}
+            <BsButton
+                @type="light"
+                class="oxi-btn-exceptional btn-block btn-sm"
+                @onClick={{this.openFileUpload}}
+                disabled={{this.hasContent}}
+                @icon="glyphicon glyphicon-folder-open"
+            >
+                <EmberTooltip>{{t 'component.oxifield_textarea.open'}}</EmberTooltip>
+            </BsButton>
+        {{/if}}
+
+        {{#if @content.autofill}}
+            <OxiSection::Form::Autofill
+                @config={{@content.autofill}}
+                @disabled={{this.hasContent}}
+                @valueSetter={{this.setAutofill}}
+                @encodeFields={{@encodeFields}}
+            />
+        {{/if}}
+
+        {{#if (or @content.allow_upload @content.autofill)}}
+            <BsButton
+                @type="light"
+                class="oxi-btn-cancel btn-block btn-sm"
+                @onClick={{this.resetInput}}
+                disabled={{not this.hasContent}}
+                @icon="glyphicon glyphicon-trash"
+            >
+                <EmberTooltip>{{t 'component.oxifield_textarea.reset'}}</EmberTooltip>
+            </BsButton>
+        {{/if}}
+    </div>
+</div>
+
+{{#if (or @content.allow_upload @content.autofill)}}
+    {{this.filename}}
+{{/if}}
+
+{{#if @content.allow_upload}}
+    <input
+        type="file"
+        class="oxi-file-input form-control-file"
+        style="display:none"
+        {{on "change" this.fileSelected}}
+        {{on-init this.setFileUploadElement}}
+    />
+{{/if}}

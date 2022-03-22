@@ -1,4 +1,7 @@
 #!/usr/bin/env perl
+use strict;
+use warnings;
+
 =pod
 
 =head1 NAME
@@ -6,8 +9,6 @@
 docker-test.pl - run OpenXPKI tests in a Docker container
 
 =cut
-use strict;
-use warnings;
 
 # Core modules
 use Cwd qw( realpath getcwd );
@@ -20,6 +21,10 @@ use List::Util qw( sum );
 use Pod::Usage;
 use POSIX ":sys_wait_h";
 use Symbol qw( gensym );
+
+# CPAN modules
+use File::Which qw();
+
 
 # $interactive
 #   1 = STDIN can be used for input
@@ -40,7 +45,7 @@ sub execute {
     my $kid;
     while (not $kid) {
         # show output if command takes more than 5 sec
-        if (not $interactive and $tick > 5) {
+        if (not $interactive and $tick > 10) {
             while( my $lines = <$output> ) { print "$lines" }
         }
         $kid = waitpid($pid, WNOHANG); # wait for command to exit
@@ -55,7 +60,33 @@ sub execute {
     die sprintf "ERROR - '%s' exited with code %d\n%s\n", $args->[0], $? >> 8, $lines   if ($? >> 8);
 }
 
+sub normalize_if_github_repo {
+    my ($repo) = @_;
+    return $repo =~ / \A [[:word:]-]+ \/ [[:word:]-]+ \Z /msx
+        ? "https://github.com/$repo.git"
+        : $repo;
+}
+
+sub get_branch_commit {
+    my ($dir) = @_;
+    my ($branch, $commit);
+
+    chdir($dir);
+
+    $branch = `git rev-parse --abbrev-ref HEAD`;
+    chomp $branch;
+    # if we are currently in a detached head (i.e. no branch name)
+    if ($branch eq 'HEAD') {
+        $commit = `git rev-parse --short HEAD`; # get commit ID
+        chomp $commit;
+        $branch = undef;
+    }
+    return ($branch, $commit);
+}
+
+
 my $project_root = realpath("$Bin/../");
+my $engine = File::Which::which('docker') || File::Which::which('podman') || die "Could not find 'docker' or 'podman'\n";
 
 #
 # Parse command line arguments
@@ -108,41 +139,18 @@ $docker_env{OXI_TEST_ALL}      = $test_all if $test_all;
 $docker_env{OXI_TEST_COVERAGE} = $test_coverage if $test_coverage;
 $docker_env{OXI_TEST_NONINTERACTIVE} = 1 if $batch;
 
-sub normalize_repo {
-    my ($repo) = @_;
-    return $repo =~ / \A [[:word:]-]+ \/ [[:word:]-]+ \Z /msx
-        ? "https://github.com/$repo.git"
-        : $repo;
-}
-
-sub get_branch_commit {
-    my ($dir) = @_;
-    my ($branch, $commit);
-
-    chdir($dir);
-
-    $branch ||= `git rev-parse --abbrev-ref HEAD`;
-    chomp $branch;
-    # if we are currently in a detached head (i.e. no branch name)
-    if ($branch eq 'HEAD') {
-        $commit = `git rev-parse --short HEAD`; # get commit ID
-        chomp $commit;
-        $branch = undef;
-    }
-    return ($branch, $commit);
-}
-
 #
 # Code repository
 #
 my $is_local_repo = 0;
 if ($repo) {
-    $docker_env{OXI_TEST_GITREPO} = normalize_repo($repo);
+    $docker_env{OXI_TEST_GITREPO} = normalize_if_github_repo($repo);
 }
 # default to current branch in case of local repo
 else {
-    ($branch, $commit) = get_branch_commit($project_root);
     push @docker_args, "-v", "$project_root:/repo";
+    $docker_env{OXI_TEST_GITREPO} = "/repo";
+    ($branch, $commit) = get_branch_commit($project_root);
     $is_local_repo = 1;
 }
 
@@ -153,25 +161,26 @@ $docker_env{OXI_TEST_GITCOMMIT} = $commit if $commit;
 # Configuration repository
 #
 if ($conf_repo) {
-    $docker_env{OXI_TEST_CONFIG_GITREPO} = normalize_repo($conf_repo);
+    $docker_env{OXI_TEST_CONFIG_GITREPO} = normalize_if_github_repo($conf_repo);
 }
-# default to current branch in case of local repo
+# default
 else {
-    $docker_env{OXI_TEST_CONFIG_GITREPO} = normalize_repo('openxpki/openxpki-config');
-
-    # use local config commit only if also local code repo is used
     my $conf_dir = "$project_root/config";
-    if ($is_local_repo and -e "$conf_dir/config.d/system/server.yaml") {
+
+    # local code repo is used and local config repo exists
+    if ($is_local_repo and -f "$conf_dir/.git" and -f "$conf_dir/config.d/system/server.yaml") {
+        # use the local config's current commit
+        $docker_env{OXI_TEST_CONFIG_GITREPO} = "/repo/config";
         ($conf_branch, $conf_commit) = get_branch_commit($conf_dir);
-        # Pleas note:
-        # config/ is most probably only a Git sub-module and thus could not be accessed
-        # from within the container if we pass "-v $conf_dir:/config" to Docker
+    }
+    else {
+        # no local config repo: use default Github repo
+        $docker_env{OXI_TEST_CONFIG_GITREPO} = normalize_if_github_repo('openxpki/openxpki-config');
     }
 }
 
 $docker_env{OXI_TEST_CONFIG_GITBRANCH} = $conf_branch if $conf_branch;
 $docker_env{OXI_TEST_CONFIG_GITCOMMIT} = $conf_commit if $conf_commit;
-
 
 push @docker_args,
     map {
@@ -192,7 +201,7 @@ if ($batch) {
 else {
     `which sha256sum` or die "Sorry, I need the 'sha256sum' command line tool\n";
 
-    print "(This might take more than 10 minutes on first execution)\n";
+    print "(might take more than 10 minutes when first run on a new host)\n";
     # Make scripts accessible for "docker build" (Dockerfile).
     # Only update TAR file if neccessary to prevent Docker from always rebuilding the image
     my $tarfile = "$Bin/docker-test/scripts.tar";
@@ -215,14 +224,14 @@ else {
     }
     chdir $olddir;
 
-    @cmd = ( qw( docker build -t oxi-test ), "$Bin/docker-test");
+    @cmd = ( $engine, qw( build -t oxi-test ), "$Bin/docker-test");
     execute \@cmd;
 }
 
 #
 # Run container
 #
-@cmd = ( qw( docker run -it --rm ), @docker_args, "oxi-test" );
+@cmd = ( $engine, qw( run -it --rm ), @docker_args, "oxi-test" );
 printf "\nExecuting: %s\n", join(" ", @cmd);
 execute \@cmd, 1;
 

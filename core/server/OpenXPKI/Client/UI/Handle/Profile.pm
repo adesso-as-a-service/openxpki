@@ -13,14 +13,16 @@ sub render_profile_select {
     my $self = shift; # reference to the wrapping workflow/result
     my $args = shift;
     my $wf_action = shift;
+    my $param = shift || '';
 
+    my %extra = split /!/, $param;
 
     $self->logger()->trace( 'render_profile_select with args: ' . Dumper $args ) if $self->logger->is_trace;
 
     my $wf_info = $args->{wf_info};
 
     # Get the list of profiles from the backend - return is a hash with id => hash
-    my $profiles = $self->send_command_v2( 'get_cert_profiles', {});
+    my $profiles = $self->send_command_v2( 'get_cert_profiles', \%extra );
     # Transform hash into value/label list and sort it
     # Apply translation to sort on translated strings
     map { $profiles->{$_}->{label} = i18nGettext($profiles->{$_}->{label}) } keys %{$profiles};
@@ -45,7 +47,7 @@ sub render_profile_select {
     my @fields;
     foreach my $field (@{$wf_info->{activity}->{$wf_action}->{field}}) {
         my $name = $field->{name};
-        my $item = $self->__render_input_field( $field, $context->{$name} );
+        my ($item, @more_items) = $self->__render_input_field( $field, $context->{$name} );
         next unless ($item);
 
         if ($name eq 'cert_profile') {
@@ -53,17 +55,17 @@ sub render_profile_select {
                 %{$item},
                 options => \@profiles,
                 actionOnChange => 'profile!get_styles_for_profile',
-                prompt => $item->{placeholder}, # todo - rename in UI
+                prompt => $item->{placeholder}, # TODO - rename in UI
             };
         } elsif ($name eq 'cert_subject_style') {
             $item = {
                 %{$item},
                 options => \@styles,
-                prompt => $item->{placeholder}, # todo - rename in UI
+                prompt => $item->{placeholder}, # TODO - rename in UI
             };
         }
 
-        push @fields, $item;
+        push @fields, $item, @more_items;
     }
 
 
@@ -105,12 +107,21 @@ sub render_subject_form {
     my $wf_action = shift;
     my $param = shift;
 
-    my $section;
-    my $mode = 'enroll';
-
+    my %extra;
     if ($param) {
-        ($section, $mode) = split /!/, $param;
+        my @param = split /!/, $param;
+        # Legacy format, section only
+        if (@param == 1) {
+            $extra{'section'} = $param[0];
+        } elsif (@param == 2 && $param[0] =~ m{(section|mode)}) {
+            $extra{$param[0]} = $param[1];
+        } else {
+            %extra = @param;
+        }
     }
+
+    my $section = $extra{'section'};
+    my $mode = $extra{'mode'} || 'enroll';
 
     my $wf_info = $args->{wf_info};
 
@@ -235,9 +246,10 @@ sub render_key_select {
             next FIELDS;
         }
 
-        my $item = $self->__render_input_field( $field );
+        my ($item, @more_items) = $self->__render_input_field( $field );
         next FIELDS unless ($item);
-        $item->{prompt} = $item->{placeholder}; # todo - rename in UI
+
+        $item->{prompt} = $item->{placeholder}; # TODO - rename in UI
         if ($name eq 'key_alg') {
             $item = {
                 %{$item},
@@ -249,6 +261,7 @@ sub render_key_select {
         } elsif ($name eq 'csr_type') {
              $item->{value} = 'pkcs10';
         }
+
         push @fields, $item;
     }
 
@@ -287,17 +300,26 @@ sub render_server_password {
 
     my @fields;
 
-    my $bytes = 18;
-    my $format = 'base64';
+    my %extra;
     if ($param) {
-        ($bytes, $format) = split /!/, $param;
+        my @param = split /!/, $param;
+        # Legacy format, section only
+        if (@param == 1) {
+             $extra{'length'} = $param[0];
+        } elsif (@param == 2 && $param[0] =~ m{\A\d+\z}) {
+            $extra{'length'} = $param[1];
+        } else {
+            %extra = @param;
+        }
     }
+    $extra{'format'} ||= 'base64';
+    $extra{'length'} ||= 18;
 
     my $wf_action_info = $wf_info->{activity}->{$wf_action};
     foreach my $field (@{$wf_action_info->{field}}) {
         my $value;
         if ($field->{name} eq '_password') {
-            $value = $self->send_command_v2( 'get_random', { length => $bytes, format => $format } );
+            $value = $self->send_command_v2( 'get_random', \%extra );
             if (!$value) {
                 $self->set_status('I18N_OPENXPKI_UI_PROFILE_UNABLE_TO_GENERATE_PASSWORD_ERROR_LABEL','error');
                 $self->add_section({
@@ -312,8 +334,8 @@ sub render_server_password {
         } else {
             $value = $context->{$field->{name}};
         }
-        my $item = $self->__render_input_field( $field, $value );
-        push @fields, $item if ($item);
+        my @items = $self->__render_input_field( $field, $value );
+        push @fields, @items;
     }
 
     # record the workflow info in the session
@@ -359,22 +381,25 @@ sub __translate_form_def {
             value => $values->{$field->{id}},
         };
 
-        if ($field->{type} eq 'freetext') {
-            $new->{type} = 'text';
-        } elsif ($field->{type} eq 'select') {
+        if ($field->{type} eq 'select') {
             $new->{type} = 'select';
             $new->{options} = $field->{options};
+        } elsif ($field->{type} =~ m{static|textarea|datetime}) {
+               $new->{type} = $field->{type};
         } else {
             $new->{type} = 'text';
         }
 
-        if (defined $field->{min}) {
-            if ($field->{min} == 0) {
-                $new->{is_optional} = 1;
-            } else {
-                $new->{min} = $field->{min};
-                $new->{clonable} = 1;
-            }
+        # reasons to make the field optional
+        if ((defined $field->{min} && $field->{min} == 0)
+            || (defined $field->{required} && $field->{required} eq '0')
+            || ($field->{type} eq 'static')) {
+            $new->{is_optional} = 1;
+        }
+
+        if ($field->{min}) {
+            $new->{min} = $field->{min};
+            $new->{clonable} = 1;
         }
 
         if (defined $field->{max}) {

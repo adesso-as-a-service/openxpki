@@ -39,7 +39,9 @@ my %ATTR_TYPES = (
     created              => { isa => 'Int', default => sub { time } },
     modified             => { isa => 'Int', }, # will be set before session is persisted
     user                 => { isa => 'Str', },
-    role                 => { isa => 'Str', },
+    role                 => { isa => 'Str', trigger => sub { my $self = shift; $self->_attr_change; $self->clear_primary_tenant() } },
+    tenants              => { isa => 'ArrayRef', trigger => sub { my $self = shift; $self->_attr_change; $self->clear_primary_tenant() } },
+    primary_tenant       => { isa => 'Str|Undef' },
     userinfo             => { isa => 'HashRef|Undef' },
     authinfo             => { isa => 'HashRef|Undef' },  # login / refresh links for SSO
     pki_realm            => { isa => 'Str', },
@@ -65,9 +67,9 @@ my %ATTR_TYPES = (
 for my $name (keys %ATTR_TYPES) {
     my $type_def = $ATTR_TYPES{$name};
     has $name => (
+        trigger => sub { shift->_attr_change },
         %$type_def,
         is => 'rw',
-        trigger => sub { shift->_attr_change },
         predicate => "has_$name",
         documentation => 'session',
     );
@@ -128,6 +130,7 @@ The following methods are available to access the session attributes:
     user                    clear_user
     userinfo                clear_userinfo
     role                    clear_role
+    tenants                 clear_tenants
     pki_realm               clear_pki_realm
     challenge               clear_challenge
     authentication_stack    clear_authentication_stack

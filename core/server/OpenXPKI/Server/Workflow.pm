@@ -23,8 +23,7 @@ use OpenXPKI::Serialization::Simple;
 use OpenXPKI::DateTime;
 
 my @PERSISTENT_FIELDS = qw( proc_state count_try wakeup_at reap_at archive_at );
-# "session_info" is a special case: saved, but only read by watchdog
-my @TRANSIENT_FIELDS = qw( session_info persist_context is_startup is_forced_fail );
+my @TRANSIENT_FIELDS = qw( persist_context is_startup );
 __PACKAGE__->mk_accessors( @PERSISTENT_FIELDS, @TRANSIENT_FIELDS );
 
 
@@ -32,7 +31,7 @@ my $default_reap_at_interval = '+0000000005';
 
 my %known_proc_states = (
 
-    # 'action' defines what should happen (= which hook-method should be called)
+    # 'hook' defines what should happen (= which hook-method should be called)
     # when execute_action() is called on this proc_state.
     #
     # Special actions:
@@ -49,7 +48,7 @@ my %known_proc_states = (
     #    '_wake_up' is called (IN current Activity object!)
     #
 
-    # set in constructor, no action executed yet
+    # state 'init' is set in constructor, no action executed yet
     init => {
         hook => 'none',
         enforceable => [ 'fail' ],
@@ -67,7 +66,7 @@ my %known_proc_states = (
     # action executes
     running => {
         hook => 'none',
-        enforceable => [ 'fail' ],
+        enforceable => [ 'fail', 'reset' ],
     },
     # action stops regulary
     manual => {
@@ -76,8 +75,8 @@ my %known_proc_states = (
     },
     # action finished with success
     finished => {
-        hook => 'none', # perfectly handled from WF-State-Engine
-        enforceable => [ 'archive' ],
+        hook => 'none', # perfectly handled by Workflow state engine
+        enforceable => [ 'archive', 'delete' ],
     },
     # action paused
     pause => {
@@ -87,7 +86,7 @@ my %known_proc_states = (
     # an exception has been thrown
     exception => {
         hook => '_resume',
-        enforceable => [ 'fail', 'resume' ],
+        enforceable => [ 'fail', 'resume', 'reset' ],
     },
     # count of retries has been exceeded
     retry_exceeded => {
@@ -97,9 +96,13 @@ my %known_proc_states = (
     # workflow has been archived
     archived => {
         hook => '_runtime_exception',
-        enforceable => [ ],
+        enforceable => [ 'delete' ],
     },
-
+    # workflow was forcibly failed
+    failed => {
+        hook => '_runtime_exception',
+        enforceable => [ 'archive', 'delete' ],
+    },
 );
 
 sub init {
@@ -121,7 +124,6 @@ sub init {
 
     $self->proc_state('init');
     $self->count_try(0);
-    $self->is_forced_fail(0);
 
     # For existing workflows - check for the watchdog extra fields
     if ($id) {
@@ -136,10 +138,10 @@ sub init {
         $self->is_startup(1);
     }
 
-    # the condition cache bug also affects the get_action_fields method
-    # which we use prior execute_action to validate the input parameters
-    # so we clear the cache in the current state anytime we init a workflow
-    # see jonasbn/perl-workflow#9
+    # The condition cache bug also affects the get_action_fields method
+    # which we use prior execute_action() to validate the input parameters.
+    # So we clear the cache in the current state anytime we init a workflow.
+    # See jonasbn/perl-workflow#9
     $self->_get_workflow_state()->clear_condition_cache();
 
     return $self;
@@ -167,10 +169,6 @@ sub execute_action {
 
     try {
         $self->persist_context(1);
-
-        $self->session_info(
-            CTX('session')->data->freeze(only => [ "user", "role" ])
-        );
 
         # The workflow module internally caches conditions and does NOT clear
         # this cache if you just refetch a workflow! As the workflow state
@@ -307,7 +305,7 @@ sub execute_action {
         my $autofail = $self->_get_workflow_state()->{_actions}->{$action_name}->{autofail};
         if (defined $autofail && $autofail =~ /(yes|1)/i) {
             ##! 16: 'execute failed and has autofail set'
-            $self->_fail($error);
+            $self->_fail(error => $error);
         }
 
         # Something unexpected went wrong inside the action, throw exception
@@ -347,27 +345,41 @@ sub execute_action {
     return $state;
 }
 
-sub set_failed {
+sub reset_hungup {
 
     my $self = shift;
-    my $error = shift;
-    my $reason = shift;
+    eval {
+        $self->notify_observers( 'wakeup', '' );
+        $self->add_history({
+            action      => '',
+            description => 'RESET',
+            state       => $self->state(),
+            user        => CTX('session')->data->user,
+        });
+        $self->context->param( wf_exception => undef );
+        $self->_set_proc_state('manual');#saves wf data
+    };
+    if (my $eval_err = $EVAL_ERROR) {
+        $self->_proc_state_exception( $eval_err );
+        # Don't use 'workflow_error' here since $eval_err should already
+        # be a Workflow::Exception object or subclass
+        croak $eval_err;
+    }
+}
 
-    $self->is_forced_fail(1); # flag for persister
+sub set_failed {
+    my ($self, $error, $reason) = @_;
 
-    $self->_fail($error, $reason); # also saves to DB
-
-    return $self;
-
+    $self->_fail(error => $error, reason => $reason, forced => 1); # also saves to DB
 }
 
 sub set_archived {
     my ($self) = @_;
 
     # only archive finished workflows
-    if ($self->proc_state ne 'finished') {
+    if ($self->proc_state ne 'finished' and $self->proc_state ne 'failed') {
         OpenXPKI::Exception->throw(
-            message => "Attempt to archive workflow that is not in proc_state 'finished'",
+            message => "Attempt to archive workflow that is not in proc_state 'finished' or 'failed'",
             params => { type => $self->type, proc_state => $self->proc_state },
         );
     }
@@ -526,9 +538,6 @@ sub save_initial {
         ##! 32: 'Send to watchdog with a delay of ' . $delay
         $self->proc_state('pause');
         $self->wakeup_at( time() + $delay );
-        $self->session_info(
-            CTX('session')->data->freeze(only => [ "user", "role" ])
-        );
     }
 
     $self->context->param( wf_current_action => $action_name );
@@ -561,9 +570,9 @@ sub set_reap_at_interval {
     $self->_save if ((not $skip_saving) and $self->is_running);
 }
 
-=head2 set_archive_after
+=head2 set_archive_at
 
-Set the auto-archiving interval (relative date format, see L<OpenXPKI::DateTime>).
+Set the auto-archiving interval (relative date format or epoch, see L<OpenXPKI::DateTime>).
 
 The interval is converted into an epoch timestamp and written to the
 C<archive_at> field in the database.
@@ -571,25 +580,25 @@ C<archive_at> field in the database.
 Triggers a DB update via persister unless C<$skip_saving> is set to a TRUE value.
 
 =cut
-sub set_archive_after {
+sub set_archive_at {
     my ($self, $interval, $skip_saving) = @_;
 
     ##! 16: sprintf('set archive interval to %s', $interval)
-
-    my $epoch = OpenXPKI::DateTime::get_validity({
-        VALIDITY => $interval,
-        VALIDITYFORMAT => 'relativedate',
-    })->epoch;
-
-    $self->archive_at($epoch);
+    if ($interval =~ m{\A\+}) {
+        $interval = OpenXPKI::DateTime::get_validity({
+            VALIDITY => $interval,
+            VALIDITYFORMAT => 'relativedate',
+        })->epoch;
+    }
+    $self->archive_at($interval);
     # if the wf is already running, immediately save data to db:
     $self->_save if ((not $skip_saving) and $self->is_running);
 }
 
 =head2 get_global_actions
 
-Return an arrayref with the names of the global actions wakeup, resume, fail
-that are available to the session user on this workflow.
+Return an I<ArrayRef> with the names of the global actions like C<wakeup>,
+C<resume> or C<fail> on this workflow that are available to the session user.
 
 =cut
 
@@ -840,37 +849,36 @@ sub _proc_state_exception {
 }
 
 sub _fail {
-
-    my $self = shift;
-    my $error = shift;
-    my $reason = shift || 'autofail';
+    my ($self, %args) = @_;
+    my $error = $args{error};
+    my $forced = $args{forced} || 0;
+    my $reason = $args{reason} || ($forced ? 'unknown' : 'autofail');
 
     # do not fail workflow that are finished
-    if ( $self->proc_state eq 'finished' ) {
-        CTX('log')->workflow()->warn("Called fail on already finished workflow #" . $self->id);
+    if ($self->proc_state eq 'finished') {
+        CTX('log')->workflow->warn("Called fail on already finished workflow #" . $self->id);
         return;
     }
 
+    my $proc_state = $forced ? 'failed' : 'finished';
+
     eval{
         $self->state('FAILURE');
-        $self->_set_proc_state('finished');
-        $self->notify_observers( 'fail', $self->state, $self->{_CURRENT_ACTION}, $error);
+        $self->_set_proc_state($proc_state);
+        $self->notify_observers('fail', $self->state, $self->{_CURRENT_ACTION}, $error);
         $self->add_history({
-            action      => $self->{_CURRENT_ACTION},
+            action => $self->{_CURRENT_ACTION},
             description => 'FAIL:' . $reason,
-            user        => CTX('session')->data->user,
+            user => CTX('session')->data->user,
         });
         $self->_save();
     };
 
-    if ($reason eq 'autofail') {
-        CTX('log')->application()->error("Auto-Fail workflow ".$self->id." after action ".$self->{_CURRENT_ACTION}." with error " . $error);
-
+    if ($forced) {
+        CTX('log')->application->info("Forced Fail for workflow ".$self->id." after action ".$self->{_CURRENT_ACTION});
     } else {
-        CTX('log')->application()->info("Forced Fail for workflow ".$self->id." after action ".$self->{_CURRENT_ACTION});
-
+        CTX('log')->application->error("Auto-Fail workflow ".$self->id." after action ".$self->{_CURRENT_ACTION}." with error " . $error);
     }
-
 }
 
 sub is_running(){
@@ -925,6 +933,24 @@ sub factory {
     return $self->_factory();
 }
 
+sub delete {
+    my $self = shift;
+
+    OpenXPKI::Exception->throw (
+        message => "Deleting workflows not allowed in proc_state '" . $self->proc_state . "'",
+        params => { type => $self->proc_state },
+    ) unless ($self->proc_state =~ m{(archived|finished|failed)});
+
+    my $persister = $self->factory()->get_persister_for_workflow_type($self->type);
+    OpenXPKI::Exception->throw (
+        message => "The persister of this workflow does not support workflow deletion",
+        params => { type => $self->type },
+    ) unless ($persister->can('delete_workflow'));
+
+    CTX('log')->application()->info("Deleting workflow ".$self->id);
+
+    return $persister->delete_workflow($self);
+}
 
 1;
 __END__

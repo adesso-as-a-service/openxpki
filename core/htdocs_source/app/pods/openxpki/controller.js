@@ -2,10 +2,12 @@ import Controller from '@ember/controller';
 import { tracked } from '@glimmer/tracking';
 import { action, computed, set } from '@ember/object';
 import { gt } from '@ember/object/computed';
-import { inject as service } from '@ember/service';
+import { inject } from '@ember/service';
 
 export default class OpenXpkiController extends Controller {
-    @service('oxi-config') config;
+    @inject('oxi-config') config;
+    @inject('oxi-content') content;
+    @inject router;
 
     // Reserved Ember properties
     // https://api.emberjs.com/ember/release/classes/Controller
@@ -22,6 +24,7 @@ export default class OpenXpkiController extends Controller {
     limit = null;
 
     @tracked loading = false;
+    @tracked showInfoBlock = false;
 
     @computed("model.status.{level,message}")
     get statusClass() {
@@ -34,17 +37,28 @@ export default class OpenXpkiController extends Controller {
         return "alert-info";
     }
 
+    @computed("model.status.message")
+    get statusHidden() {
+        let message = this.get("model.status.message");
+        return !message;
+    }
+
     @gt("model.tabs.length", 1) showTabs;
 
-    // Wen don't use <ddm.LinkTo> but our own method to navigate to target page.
+    // We don't use <ddm.LinkTo> but our own method to navigate to target page.
     // This way we can force Ember to do a transition even if the new page is
     // the same page as before by setting parameter "force" a timestamp.
     @action
     navigateTo(page, event) {
-        event.stopPropagation();
-        event.preventDefault();
-        //this.lookup("route:openxpki").transitionTo("openxpki", button.page);
-        this.transitionToRoute('openxpki', page, { queryParams: { force: (new Date()).valueOf() } });
+        if (event) { event.stopPropagation(); event.preventDefault() }
+        this.router.transitionTo('openxpki', page, { queryParams: { force: (new Date()).valueOf() } });
+    }
+
+    @action
+    logout(event) {
+        if (event) { event.stopPropagation(); event.preventDefault() }
+        this.content.setTenant(null);
+        this.navigateTo('logout');
     }
 
     @action
@@ -73,5 +87,10 @@ export default class OpenXpkiController extends Controller {
     @action
     clearPopupData() {
         return this.set("model.popup", null);
+    }
+
+    @action
+    toggleInfoBlock() {
+        this.showInfoBlock = !this.showInfoBlock;
     }
 }

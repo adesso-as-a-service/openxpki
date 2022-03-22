@@ -4,6 +4,7 @@ package OpenXPKI::Client::UI::Handle::Status;
 use Moose;
 use Data::Dumper;
 use English;
+use OpenXPKI::DateTime;
 use OpenXPKI::Serialization::Simple;
 
 sub render_process_status {
@@ -96,7 +97,7 @@ sub render_system_status {
         push @fields, {
             label  => 'No CRL found!',
             value  => '---',
-            className => 'warning'
+            className => 'oxi-status-warning'
         };
         $warning = 1;
     } elsif ($status->{crl_expiry} < $now) {
@@ -104,23 +105,33 @@ sub render_system_status {
             label  => 'CRL expired - update required!',
             format => 'timestamp',
             value  => $status->{crl_expiry},
-            className => 'danger'
+            className => 'oxi-status-danger'
         };
         $critical = 1;
-    } elsif ($status->{crl_expiry} < ($now + 5*86400)) {
-        push @fields, {
-            label  => 'CRL is near expiration - update recommended!',
-            format => 'timestamp',
-            value  => $status->{crl_expiry},
-            className => 'warning'
-        };
-        $warning = 1;
     } else {
-        push @fields, {
-            label  => 'I18N_OPENXPKI_UI_CRL_STATUS_LABEL',
-            format => 'timestamp',
-            value  => $status->{crl_expiry}
-        };
+
+        my $crl_expiry = $now + 5*86400;
+        # try to read DV and CRL Expiry from workflow
+        $crl_expiry = OpenXPKI::DateTime::get_validity({
+            VALIDITY => $wf_info->{workflow}->{context}->{crl_expiry},
+            VALIDITYFORMAT => 'detect'
+        })->epoch() if($wf_info->{workflow}->{context}->{crl_expiry});
+
+        if ($status->{crl_expiry} < $crl_expiry) {
+            push @fields, {
+                label  => 'CRL is near expiration - update recommended!',
+                format => 'timestamp',
+                value  => $status->{crl_expiry},
+                className => 'oxi-status-warning'
+            };
+            $warning = 1;
+        } else {
+            push @fields, {
+                label  => 'I18N_OPENXPKI_UI_CRL_STATUS_LABEL',
+                format => 'timestamp',
+                value  => $status->{crl_expiry}
+            };
+        }
     }
 
     if (!defined $status->{dv_expiry}) {
@@ -131,7 +142,7 @@ sub render_system_status {
         push @fields, {
             label  => 'No encryption token set!',
             value => '---',
-            className => 'warning',
+            className => 'oxi-status-warning',
         };
     } else {
 
@@ -140,7 +151,7 @@ sub render_system_status {
             push @fields, {
                 label  => 'Active Encryption Token',
                 value  => 'No token found',
-                className => 'danger',
+                className => 'oxi-status-danger',
             };
             $critical = 1;
         } elsif ($dp_status->{online}) {
@@ -153,7 +164,7 @@ sub render_system_status {
             push @fields, {
                 label  => 'Active Encryption Token',
                 value  => sprintf('not available (%s)', $dp_status->{alias}),
-                className => 'danger',
+                className => 'oxi-status-danger',
             };
             $critical = 1;
         }
@@ -166,16 +177,26 @@ sub render_system_status {
                 label  => 'Encryption token is expired',
                 format => 'timestamp',
                 value  => $status->{dv_expiry},
-                className => 'danger',
+                className => 'oxi-status-danger',
             };
-        } elsif ($status->{dv_expiry} < $now + 30*86400) {
-            $warning = 1;
-            push @fields, {
-                label  => 'Encryption token expires',
-                format => 'timestamp',
-                value  => $status->{dv_expiry},
-                className => 'warning',
-            };
+        } else {
+
+            my $dv_expiry = $now + 30*86400;
+            # try to read DV and CRL Expiry from workflow
+            $dv_expiry = OpenXPKI::DateTime::get_validity({
+                VALIDITY => $wf_info->{workflow}->{context}->{dv_expiry},
+                VALIDITYFORMAT => 'detect'
+            })->epoch() if($wf_info->{workflow}->{context}->{dv_expiry});
+
+            if ($status->{dv_expiry} < $dv_expiry) {
+                $warning = 1;
+                push @fields, {
+                    label  => 'Encryption token expires',
+                    format => 'timestamp',
+                    value  => $status->{dv_expiry},
+                    className => 'oxi-status-warning',
+                };
+            }
         }
     }
 
@@ -183,7 +204,7 @@ sub render_system_status {
         push @fields, {
             label  => 'I18N_OPENXPKI_UI_WATCHDOG_STATUS_LABEL',
             value  => 'I18N_OPENXPKI_UI_WATCHDOG_NOT_RUNNING',
-            className => 'danger',
+            className => 'oxi-status-danger',
         };
         $critical = 1;
     }
@@ -227,7 +248,7 @@ sub render_system_status {
 
             my $className = '';
             if ($alias->{status} ne 'ONLINE') {
-                $className = 'danger';
+                $className = 'oxi-status-danger';
                 $critical = 1;
             }
 

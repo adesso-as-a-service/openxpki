@@ -15,8 +15,7 @@ use OpenXPKI::Debug;
 use OpenXPKI::Server::Context qw( CTX );
 use OpenXPKI::Server::API2::Types;
 use OpenXPKI::Server::API2::Plugin::Workflow::Util;
-
-
+with 'OpenXPKI::Server::API2::TenantRole';
 
 =head1 COMMANDS
 
@@ -90,6 +89,18 @@ The namespace has a default of I<workflow.lock>, so if you dont need to
 modify neither namespace or error handling you can directly pass the locks
 key as String instead of using a HashRef.
 
+=item * C<tenant> I<Str>. Optional
+
+Assign the new workflow to the given tenant. The value must be a valid
+tenant for the current session user, if it is not given and tenant mode
+is turned on, the primary tenant is loaded. Set to the emtpy string to
+not assign the workflow to any tenant.
+
+=item * C<_run_as_system> I<Bool>. Optional
+
+Execute the workflow with the permissions of the system role, disables
+validation or autodiscovery of the tenant.
+
 =back
 
 =cut
@@ -99,22 +110,42 @@ command "create_workflow_instance" => {
     params   => { isa => 'HashRef', default => sub { {} } },
     ui_info  => { isa => 'Bool', default => 0, },
     norun    => { isa => 'Str', matching => qr{ \A(persist|detach|watchdog|)\z }xms, default => '' },
-    use_lock    => { isa => 'HashRef|Str' },
+    use_lock => { isa => 'HashRef|Str' },
+    tenant   => { isa => 'Tenant' },
+    _run_as_system  => { isa => 'Bool', default => 0 },
 } => sub {
     my ($self, $params) = @_;
     my $type = $params->workflow;
 
-    my $norun = $params->norun || '';
+    my $norun = $params->norun;
 
-    ##! 1: 'Norun ' . $norun
+    ##! 16: 'Norun ' . $norun
+    ##! 64: Dumper $params
 
     my $util = OpenXPKI::Server::API2::Plugin::Workflow::Util->new;
 
-    my $workflow = CTX('workflow_factory')->get_factory->create_workflow($type)
-        or OpenXPKI::Exception->throw (
-            message => "Could not start workflow (type might be unknown)",
-            params => { type => $type }
-        );
+    my $workflow;
+    my $tenant;
+    if ($params->_run_as_system) {
+
+        OpenXPKI::Exception->throw (
+            message => '_run_as_system requires norun=detach'
+        ) unless($norun eq 'detach');
+
+        $tenant = $params->tenant;
+        $workflow = CTX('workflow_factory')->get_factory->create_workflow_as_system($type);
+
+    } else {
+
+        $tenant = $self->get_validated_tenant( $params->tenant );
+        $workflow = CTX('workflow_factory')->get_factory->create_workflow($type);
+    }
+    ##! 32: "Tenant $tenant"
+
+    OpenXPKI::Exception->throw (
+        message => "Could not initialize workflow",
+        params => { type => $type }
+    ) unless($workflow);
 
     my $id = $workflow->id;
     ##! 2: "New workflow's ID: $id"
@@ -147,6 +178,12 @@ command "create_workflow_instance" => {
     # This is crucial and must be done before the first execute as otherwise
     # workflow ACLs fails when the first non-initial action is autorun
     $workflow->attrib({ creator => $creator });
+
+    # add the tenant information to context and attributes
+    if ($tenant) {
+        $workflow->attrib({ tenant => $tenant });
+        $context->{PARAMS}{'tenant'} = $tenant;
+    }
 
     OpenXPKI::Server::Context::setcontext({ workflow_id => $id, force => 1 });
 
@@ -196,7 +233,7 @@ command "create_workflow_instance" => {
             ##! 16: 'Create detached'
             # call async exec, this will only crash on a fork error so we dont
             # use an eval here
-            $workflow = $util->execute_activity($workflow, $initial_action, 1);
+            $workflow = $util->execute_activity($workflow, $initial_action, 1, 0, 'System');
 
         } elsif ($norun eq 'watchdog') {
             ##! 16: 'Persist and dispatch to watchdog'

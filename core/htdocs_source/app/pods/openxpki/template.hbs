@@ -2,21 +2,27 @@
     <link integrity="" rel="stylesheet" href="{{this.config.customCssUrl}}">
 {{/if}}
 
+{{!
+  *************************************
+  Menu
+  *************************************
+}}
 <BsNavbar
-    @type="default"
-    @backgroundColor="light"
+    @type="light"
+    @backgroundColor=""
+    class="py-2 py-lg-0 mb-3 oxi-navbar"
     @collapsed={{true}}
-    @onCollapse={{action (mut collapsed) true}}
-    @onExpand={{action (mut collapsed) false}} as |navbar|
+    @onCollapse={{action (mut this.collapsed) true}}
+    @onExpand={{action (mut this.collapsed) false}} as |navbar|
 >
     <div class="navbar-header">
-        {{navbar.toggle}}
+        <navbar.toggle />
     </div>
     <navbar.content>
-        <navbar.nav as |nav|>
+        <navbar.nav class="mr-auto" as |nav|>
             {{#each this.model.navEntries as |navEntry|}}
                 {{#if navEntry.entries.length}}
-                    <nav.dropdown as |dd|>
+                    <nav.dropdown class="mx-2" as |dd|>
                         <dd.toggle>
                             {{navEntry.label}}
                             <span class="caret"></span>
@@ -27,7 +33,7 @@
                                     {{#if entry.key}}
                                         {{! We need the href in addition to the click handler to support
                                             opening the page in a new window }}
-                                        <a href="{{url-for "openxpki" entry.key}}" {{on "click" (fn this.navigateTo entry.key)}}>
+                                        <a class="dropdown-item" href="{{url-for "openxpki" entry.key}}" {{on "click" (fn this.navigateTo entry.key)}}>
                                             {{entry.label}}
                                         </a>
                                     {{else}}
@@ -42,18 +48,18 @@
                         </dd.menu>
                     </nav.dropdown>
                 {{else}}
-                    <nav.item>
-                        <a href="{{url-for "openxpki" navEntry.key}}" {{on "click" (fn this.navigateTo navEntry.key)}}>
+                    <nav.item class="mx-2">
+                        <a class="nav-link" href="{{url-for "openxpki" navEntry.key}}" {{on "click" (fn this.navigateTo navEntry.key)}}>
                             {{navEntry.label}}
                         </a>
                     </nav.item>
                 {{/if}}
             {{/each}}
         </navbar.nav>
-        <navbar.nav class="navbar-right" as |nav|>
+        <navbar.nav as |nav|>
             {{#if this.model.user}}
                 <nav.item>
-                    <nav.linkTo @route="openxpki" @model="logout">
+                    <nav.linkTo {{on "click" this.logout}}>
                         {{t 'site.logout'}}
                     </nav.linkTo>
                 </nav.item>
@@ -62,88 +68,150 @@
     </navbar.content>
 </BsNavbar>
 
-<div class="container-fluid  {{this.model.tabs.firstObject.page.className}}">
-    <div class="oxi-message">
-        {{#if this.model.status.href}}
-            <a href="{{this.model.status.href}}" target="_blank">
-                <div class="alert {{this.statusClass}}" style="cursor:pointer;">
+<div class="container-fluid {{this.model.tabs.firstObject.page.className}}">
+    {{!
+      *************************************
+      Messages
+      *************************************
+    }}
+    <div class="row">
+        <div class="col oxi-message">
+            {{#if this.model.status.href}}
+                <a href="{{this.model.status.href}}" target="_blank" hidden={{this.statusHidden}}>
+                    <div class="alert {{this.statusClass}}" style="cursor:pointer;">
+                        <OxiBase::Formatted @format="nl2br" @value={{this.model.status.message}}/>
+                    </div>
+                </a>
+            {{else}}
+                <div class="alert {{this.statusClass}}" hidden={{this.statusHidden}}>
                     <OxiBase::Formatted @format="nl2br" @value={{this.model.status.message}}/>
                 </div>
-            </a>
-        {{else}}
-            <div class="alert {{this.statusClass}}">
-                <OxiBase::Formatted @format="nl2br" @value={{this.model.status.message}}/>
-            </div>
-        {{/if}}
+            {{/if}}
+        </div>
     </div>
 
-    <div class="oxi-pagehead">
-        {{#if this.model.tabs.firstObject.page.breadcrumb.length}}
-            <ol class="breadcrumb">
-                {{#each this.model.tabs.firstObject.page.breadcrumb as |entry|}}
-                    {{#if entry.label}}<li class="{{entry.className}}">{{entry.label}}</li>{{/if}}
-                {{/each}}
-            </ol>
-        {{/if}}
-        <h2>{{this.model.tabs.firstObject.page.label}}</h2>
+    {{!
+      *************************************
+      Breadcrumb and page title
+      *************************************
+    }}
+    <div class="row">
+        <div class="col oxi-pagehead">
+            {{#if this.model.tabs.firstObject.page.breadcrumb.length}}
+                <ol class="breadcrumb">
+                    {{#each this.model.tabs.firstObject.page.breadcrumb as |entry|}}
+                        {{#if entry.label}}<li class="breadcrumb-item {{entry.className}}">{{entry.label}}</li>{{/if}}
+                    {{/each}}
+                </ol>
+            {{/if}}
+            {{#if this.model.tabs.firstObject.page.label}}
+                <h3>{{this.model.tabs.firstObject.page.label}}</h3>
+            {{/if}}
+        </div>
     </div>
 
     {{#if this.model.tabs.firstObject.page.description}}
-        <div class="description">
-            {{{this.model.tabs.firstObject.page.description}}}
+        <div class="row">
+            <div class="col mb-3">
+                {{{this.model.tabs.firstObject.page.description}}}
+            </div>
         </div>
     {{/if}}
-    {{#if this.showTabs}}
-        <ul class="nav nav-tabs">
-            {{#each this.model.tabs as |entry|}}
-                <li class="{{if entry.active "active"}}">
-                    <a {{action "activateTab" entry}}>
-                        {{if entry.page.shortlabel entry.page.shortlabel entry.page.label}}
-                        <span class="tab-close" {{action "closeTab" entry}}>
-                            {{!-- template-lint-disable no-bare-strings --}}
-                            &times;
-                        </span>
-                    </a>
-                </li>
-            {{/each}}
-        </ul>
-    {{/if}}
-    <div class="tab-content">
-        {{#each this.model.tabs as |entry|}}
-            <div class="tab-pane {{if entry.active "active"}}">
-                <div class="Xcontainer sections">
-                    <div class="row">
-                        <div class="{{if entry.right "col-md-8" "col-md-12"}}">
-                            {{#each entry.main as |mainEntry|}}
-                                <OxiSection @content={{mainEntry}}/>
-                            {{/each}}
-                        </div>
-                        <div class="{{if entry.right "col-md-4" "hide"}}">
-                            {{#each entry.right as |rightEntry|}}
-                                <div class="well">
-                                    <OxiSection @content={{rightEntry}}/>
+    {{!
+      *************************************
+      Tab bar
+      *************************************
+    }}
+    <div class="row">
+        <div class="col">
+            {{#if this.showTabs}}
+                <ul class="nav nav-tabs mb-3">
+                    {{#each this.model.tabs as |entry|}}
+                        <li class="nav-item">
+                            <a class="nav-link {{if entry.active "active"}}" {{action "activateTab" entry}} href="#">
+                                {{if entry.page.shortlabel entry.page.shortlabel entry.page.label}}
+                                <span class="tab-close" {{action "closeTab" entry}}>
+                                    {{!-- template-lint-disable no-bare-strings --}}
+                                    &times;
+                                </span>
+                            </a>
+                        </li>
+                    {{/each}}
+                </ul>
+            {{/if}}
+            <div class="tab-content pb-3">
+                {{#each this.model.tabs as |entry|}}
+                    <div class="tab-pane {{if entry.active "active"}}">
+                        {{#let (and entry.right this.showInfoBlock) as |showInfo|}}
+                            <div class="row">
+                                {{!
+                                  Main page content
+                                }}
+                                <div class="col-11 {{if showInfo "col-lg-7"}} oxi-main order-0">
+                                    {{#each entry.main as |mainEntry|}}
+                                        {{! extra row/col level to restrict form width if info block
+                                             is hidden (as overly long input fields look ugly) }}
+                                        <div class="row">
+                                            <div class="col {{if (and (not showInfo) (eq mainEntry.type "form")) "col-xl-10"}}">
+                                                <OxiSection
+                                                    @content={{mainEntry}}
+                                                    @renderAsCard={{(and (eq mainEntry.type "keyvalue") (not mainEntry.content.buttons))}}
+                                                />
+                                            </div>
+                                        </div>
+                                    {{/each}}
                                 </div>
-                            {{/each}}
-                        </div>
+                                {{!
+                                  Infobox - right hand info column
+                                }}
+                                {{#if entry.right}}
+                                    {{#if showInfo}}
+                                        <div class="col-12 col-lg-4 order-2 order-lg-1 pr-lg-0 oxi-infobox">
+                                            {{#each entry.right as |rightEntry|}}
+                                                <div class="card bg-light border-secondary">
+                                                    <div class="card-body p-1">
+                                                        <OxiSection
+                                                            @content={{rightEntry}}
+                                                            @isInfoBox={{true}}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            {{/each}}
+                                        </div>
+                                    {{/if}}
+                                    <div class="col-6 col-lg-1 order-1 order-lg-2 pt-3 pl-lg-0">
+                                        <BsButton
+                                            @type="light"
+                                            class="btn-sm"
+                                            @onClick={{this.toggleInfoBlock}}
+                                            @icon="glyphicon glyphicon-{{if showInfo "remove-sign" "info-sign"}}"
+                                        >
+                                            {{t 'site.workflow_info'}}
+                                        </BsButton>
+                                    </div>
+                                {{/if}}
+                            </div>
+                        {{/let}}
                     </div>
-                </div>
+                {{/each}}
             </div>
-        {{/each}}
+        </div>
     </div>
 </div>
 
 {{#let this.model.popup as |popup|}}
     <BsModal
-        @open={{popup}}
+        @open={{if popup true false}}
         @closeButton={{true}}
         @fade={{true}}
         @backdrop={{true}}
         @backdropClose={{false}}
         @onHidden={{action "clearPopupData"}}
-        @size={{if popup.page.isLarge "lg"}}
+        @size={{if popup.page.isLarge "xl" "lg"}}
+        @scrollable={{true}}
         as |Modal|
     >
-        <Modal.header>
+        <Modal.header class="bg-secondary text-white">
             <h4 class="modal-title">
                 {{if popup.page.shortlabel popup.page.shortlabel popup.page.label}}
             </h4>
@@ -160,11 +228,12 @@
 {{/let}}
 
 <BsModal
-    @open={{this.model.error}}
+    @open={{if this.model.error true false}}
     @closeButton={{true}}
     @fade={{true}}
     @backdrop={{true}}
     @backdropClose={{false}}
+    @size="lg"
     as |Modal|
 >
     <Modal.header>
@@ -180,7 +249,7 @@
 </BsModal>
 
 {{#if this.model.refresh}}
-    <div class="refresh-banner">
+    <div class="oxi-refresh-banner">
         <span class="alert alert-info" role="alert">
             <span class="glyphicon glyphicon-refresh spin-slow"></span>
             &nbsp;{{t 'site.banner.autorefresh'}}
@@ -190,7 +259,7 @@
 
 {{#if this.model.loadingBanner}}
     <div class="dimmer"></div>
-    <div class="loading-banner">
+    <div class="oxi-loading-banner">
         <h4 class="alert alert-info" role="alert">
             <span class="glyphicon glyphicon-refresh spin"></span>
             &nbsp;{{this.model.loadingBanner}}

@@ -99,29 +99,44 @@ sub _validation_result {
 
     my $x509_signer = OpenXPKI::Crypt::X509->new( $validate->{chain}->[0] ) ;
     my $signer_subject = $x509_signer->get_subject();
-
     ##! 16: ' Signer Subject ' . $signer_subject
-    my $dn = OpenXPKI::DN->new( $signer_subject );
 
-    ##! 32: 'dn hash ' . Dumper $dn;
-    my %dn_hash = $dn->get_hashed_content();
-    ##! 16: 'dn hash ' . Dumper %dn_hash;
+    # check trust rules if present
+    if (CTX('config')->exists([ @prefix, 'trust_rule' ])) {
+        my $trust_rules = CTX('config')->get_hash([ @prefix, 'trust_rule' ]);
+        my $matched;
+        foreach my $rule (keys %{$trust_rules}) {
+            $matched = CTX('api2')->evaluate_trust_rule(
+                signer_subject      => $signer_subject,
+                signer_identifier   => $x509_signer->get_cert_identifier,
+                rule                => $trust_rules->{$rule},
+            );
+            last if ($matched);
+        }
+        return OpenXPKI::Server::Authentication::Handle->new(
+            username => $signer_subject,
+            error => OpenXPKI::Server::Authentication::Handle::NOT_AUTHORIZED,
+        ) unless($matched);
+    }
 
-    my $has_handler = CTX('config')->exists([ @prefix, 'user' ]);
     # Argument to use as username
     my $arg = $self->user_arg();
     my $username;
 
     if ($arg eq "subject" || $arg eq "dn") {
-        $username = $x509_signer->get_subject();
+        $username = $signer_subject;
     } elsif ($arg eq "serial") {
         $username = $x509_signer->get_serial();
-    } elsif ($arg eq "cert_identifier") {
+    } elsif ($arg eq "cert_identifier" || $arg eq "certid") {
         $username = $x509_signer->get_cert_identifier();
     } elsif ($arg eq "certificate") {
         $username = $x509_signer->pem;
     } else {
         $arg = uc($arg);
+
+        my %dn_hash = OpenXPKI::DN->new( $signer_subject )->get_hashed_content();
+        ##! 16: 'dn hash ' . Dumper %dn_hash;
+
         return OpenXPKI::Server::Authentication::Handle->new(
             error => OpenXPKI::Server::Authentication::Handle::UNKNOWN_ERROR,
             error_message => 'x509 client authentication requires '.$arg.' but certificate has none!',
@@ -130,11 +145,17 @@ sub _validation_result {
     }
 
     # fetch userinfo from handler
-    my $userinfo;
     my $role = $self->default_role();
+    my $tenants;
+    my $userinfo;
+    if (CTX('config')->exists([ @prefix, 'user' ])) {
+        eval{$userinfo = $self->get_userinfo($username);};
 
-    if ($has_handler) {
-        $userinfo = $self->get_userinfo($username);
+        return OpenXPKI::Server::Authentication::Handle->new(
+            username => $username,
+            error => OpenXPKI::Server::Authentication::Handle::SERVICE_UNAVAILABLE,
+            error_message => "$EVAL_ERROR"
+        ) if ($EVAL_ERROR);
 
         return OpenXPKI::Server::Authentication::Handle->new(
             username => $username,
@@ -146,6 +167,8 @@ sub _validation_result {
         delete $userinfo->{role};
         $username = $userinfo->{username};
         delete $userinfo->{username};
+        $tenants = $userinfo->{tenant}; # Str or ArrayRef
+        delete $userinfo->{tenant};
 
     }
 
@@ -156,9 +179,10 @@ sub _validation_result {
 
     return OpenXPKI::Server::Authentication::Handle->new(
         username => $username,
-        userid => $username,
+        userid => $self->get_userid( $username ),
         role => $role,
         userinfo => $userinfo,
+        $tenants ? (tenants => $tenants) : (),
         authinfo => {
             uid => $username,
             %{$self->authinfo},
@@ -219,6 +243,11 @@ Signature:
         alias:
          - name of alias groups
 
+    trust_rule:
+        rule1:
+            profile: tls_client
+            meta_auth_attribute: value
+
 =head2 parameters
 
 =over
@@ -251,7 +280,7 @@ Serial in integer notation - as string
 
 The PEM encoded certificate
 
-=item I<cert_identifier>
+=item I<cert_identifier> / I<certid>
 
 The cert_identifier.
 

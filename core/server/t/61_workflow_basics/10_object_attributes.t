@@ -19,7 +19,7 @@ use lib "$Bin";
 use OpenXPKI::Server::Context qw( CTX );
 use OpenXPKI::Test;
 
-plan tests => 22;
+plan tests => 16;
 
 #
 # Setup test context
@@ -56,7 +56,7 @@ my $workflow_dup;
 lives_and {
     $workflow = $factory->create_workflow($workflow_type);
     ok ref $workflow;
-} "Create test workflow" or BAIL_OUT "Could not create workflow";
+} "create test workflow" or die("Could not create workflow");
 
 #
 # Check initial values of our custom object attributes
@@ -66,17 +66,16 @@ my %defaults = (
     count_try => 0,
     wakeup_at => undef,
     reap_at => undef,
-    session_info => undef,
-    persist_context => 0,
     is_startup => 1,
     archive_at => undef,
 );
 
 for my $k (keys %defaults) {
-    is $workflow->$k, $defaults{$k}, "correct value of '$k' after creation";
+    is $workflow->$k, $defaults{$k}, "correct default value of '$k' after creation";
 }
 
-$workflow->_save();
+$workflow->attrib({ creator => 'dummy' }); # OpenXPKI::Workflow::Factory->can_access_workflow() needs it set
+$workflow->save_initial(); # also saves attributes ("creator"!)
 
 lives_and {
     $workflow_dup = $factory->fetch_workflow($workflow_type, $workflow->id);
@@ -84,26 +83,35 @@ lives_and {
 } "refetch workflow from database";
 
 for my $k (keys %defaults) {
-    is $workflow->$k, $defaults{$k}, "correct value of '$k' after fetching from db";
+    is $workflow->$k, $defaults{$k}, "correct default value of '$k' after fetching from db";
 }
 
 #
-# Check 'archive_after'
+# Check 'archive_at'
 #
-is $workflow->archive_at, undef, "'archive_at' initially undefined";
 
-$workflow->set_archive_after('+000000000030');
-$workflow->_save();
+my %archive_at_tests = (
+    'time period' => '+000000000030',
+    'epoch (timestamp)' => time() + 100,
+);
 
-ok $workflow->archive_at > time(), "'archive_at' defined after setting";
-my $archive_at = $workflow->archive_at;
+for my $input_type (keys %archive_at_tests) {
+    subtest "set 'archive_at' via $input_type" => sub {
+        $workflow->set_archive_at($archive_at_tests{$input_type});
+        $workflow->_save();
 
-lives_and {
-    $workflow_dup = $factory->fetch_workflow($workflow_type, $workflow->id);
-    ok ref $workflow_dup;
-} "refetch workflow from database";
+        my $archive_at = $workflow->archive_at;
 
-is $workflow_dup->archive_at, $archive_at, "'archive_at' was correctly persisted to database";
+        ok $archive_at > time(), "correctly set";
+
+        lives_and {
+            $workflow_dup = $factory->fetch_workflow($workflow_type, $workflow->id);
+            ok ref $workflow_dup;
+        } "refetch workflow from database";
+
+        is $workflow_dup->archive_at, $archive_at, "correctly persisted";
+    }, 3;
+}
 
 # Cleanup
 $oxitest->dbi->delete_and_commit(from => 'workflow', where => { workflow_type => $workflow_type });

@@ -62,6 +62,8 @@ B<Parameters>
 
 =item * C<skip_duplicate> I<Bool>
 
+=item * C<nosigner> I<Bool> - import CRLs for issuers not in the certsign group
+
 =back
 
 B<Changes compared to API v1:>
@@ -135,7 +137,7 @@ command "import_crl" => {
         pki_realm         => $pki_realm,
         issuer_identifier => $ca_identifier,
         crl_key           => $serial,
-        crl_number        => $crl->crl_number() || '',
+        crl_number        => $crl->crl_number() // '',
         last_update       => $crl->last_update(),
         next_update       => $crl->next_update(),
         publication_date  => 0,

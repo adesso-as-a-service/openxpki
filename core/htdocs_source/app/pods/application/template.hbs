@@ -1,5 +1,25 @@
-<div id="application" {{on-init this.removeLoader}}>
-    <Application::Header/>
-    {{outlet}}
+{{!-- <HeadLayout/> is required by ember-cli-head --}}
+<HeadLayout/>
+
+<div class="container-fluid oxi-page">
+    <div class="row">
+        <div class="col p-0 oxi-the-void">
+        </div>
+        <div
+            class="col-12 p-0 oxi-content"
+            class={{if this.restricted_width 'oxi-width-restricted' 'oxi-width-full'}}
+            {{on-init this.removeLoader}}
+        >
+            <div class="oxi-push-footer">
+                <Application::Header/>
+                {{outlet}}
+            </div>
+            <Application::Footer/>
+        </div>
+        <div class="col p-0 oxi-resize-overlay" {{on 'click' this.toggleWidth}}>
+            <span></span>
+        </div>
+        <div class="col p-0 oxi-the-void">
+        </div>
+    </div>
 </div>
-<Application::Footer/>

@@ -8,15 +8,18 @@ site:
     loading: "Laden..."
     redirecting: "Weiterleitung..."
   close_popup: "Schließen"
+  workflow_info: "Workflow"
 
 userinfo:
   name: "Angemeldet als"
   realm: "Realm:"
+  tenant: "Mandant:"
+  last_login: "Letze Anmeldung:"
 
 error_popup:
   header: "Anwendungsfehler"
   message:
-    server: "Der Server lieferte nicht die erwarteten Daten. Eventuell ist Ihre Sitzung abgelaufen oder es liegt ein interner Fehler vor. HTTP-Code: {code}"
+    server: "Der Server lieferte nicht die erwarteten Daten.<br>Eventuell ist Ihre Sitzung abgelaufen oder es liegt ein interner Fehler vor.<br>HTTP-Code: {code}"
     network: "Die Verbindung zum Server scheint nicht zu bestehen: {reason}"
     client: "Es trat ein Fehler beim Verarbeiten der empfangenen Serverdaten auf: {reason}"
   reload: "Anwendung neu laden"
@@ -35,15 +38,22 @@ button:
 component:
   oxifield_datetime:
     timezone: "Zeitzone: {tz}"
+    date_format: "d.m.Y H:i" # see https://flatpickr.js.org/formatting/
   oxifield_select:
     custom_value: "Angepasst"
   oxifield_cert_identifier:
     no_matches: "Keine Zertifikate gefunden"
-  oxifield_uploadarea:
+  oxifield_textarea:
     reset: "Leeren"
     open: "Datei öffnen"
     large_file: "Datei zu gross für Vorschau"
     binary_file: "Binärdatei"
+  oxifield_passwordverify:
+    retype_password: "Passwort wiederholen"
+    error_retype_password: "Bitte Passwort in zweiten Eingabefeld wiederholen"
+    error_no_match: "Passworte stimmen nicht überein"
+  oxifield_text:
+    no_search_results: "(keine Suchergebnisse)"
   oxisection_form:
     submit: "Senden"
     reset: "Zurücksetzen"
@@ -55,3 +65,9 @@ component:
     copy: "Kopieren"
   oxi_code:
     copy: "Doppelklick markiert gesamten Text"
+  oxifield_static:
+    unset: "<nicht gesetzt>"
+
+autofill:
+  button: "{target} abfragen"
+  result: "Abfrageergebnis von: {target}"

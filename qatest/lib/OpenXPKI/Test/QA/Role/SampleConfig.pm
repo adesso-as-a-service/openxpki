@@ -116,7 +116,7 @@ has path_stderr_file => (
     default => sub { shift->testenv_root."/var/log/openxpki/stderr.log" },
 );
 
-# BEFORE ... so OpenXPKI::Test->init_base_config wins with it's few base settings
+# BEFORE ... so OpenXPKI::Test->init_base_config wins with its few base settings
 before 'init_base_config' => sub { # happens before init_user_config() so we do not overwrite more specific configs of other roles
     my $self = shift;
 
@@ -179,6 +179,7 @@ sub _customize_system_server {
     $conf->{user} =  (getpwuid(geteuid))[0]; # run under same user as test scripts
     $conf->{group} = (getgrgid(getegid))[0];
     $conf->{socket_file} = $self->path_socket_file;
+    $conf->{socket_owner} = (getpwuid(geteuid))[0]; # same user as the one who runs the test scripts
     $conf->{pid_file} = $self->path_pid_file;
     $conf->{stderr} = $self->path_stderr_file;
     $conf->{tmpdir} = $self->path_temp_dir;
@@ -196,6 +197,7 @@ sub _customize_system_watchdog {
     $conf->{interval_wait_initial} = 1;
     $conf->{interval_loop_idle} = 1;
     $conf->{interval_loop_run} = 1;
+    $conf->{interval_auto_archiving} = 1;
     $conf->{disabled} = $self->start_watchdog ? 0 : 1;
 }
 

@@ -11,7 +11,7 @@
 #   backendPath: /cgi-bin/webui.fcgi --> https://x.y/cgi-bin/webui.fcgi
 #   backendPath:  cgi-bin/webui.fcgi --> https://x.y/oxi/ca1/cgi-bin/webui.fcgi
 #
-backendPath: /cgi-bin/webui.fcgi
+backendPath: cgi-bin/webui.fcgi
 
 #
 # URL path to a custom CSS file.
@@ -24,25 +24,37 @@ backendPath: /cgi-bin/webui.fcgi
 customCssPath: custom.css
 
 #
+# Page title (browser title bar)
+#
+pageTitle: "OpenXPKI - Open Source Trustcenter"
+
+#
 # Year shown in footer (unless footer is replaced using "footer")
 #
-copyrightYear: 1970
+copyrightYear: 2021
 
 #
 # Site header
 #
 header: |-
-    <h2>
+    <h3>
         <a href="./#/"><img src="img/logo.png" class="toplogo"></a>
         &nbsp;
         <small>Open Source Trustcenter</small>
-    </h2>
+    </h3>
 
 #
 # Site footer
 #
 footer: |-
     <p class="text-center text-muted credit">
-        &copy; Copyright 2020
+        &copy; Copyright 2021
         &ndash; <a href="http://www.openxpki.org/">The OpenXPKI Project</a>
     </p>
+
+#
+# Accessibility features
+#
+accessibility:
+    # delay in ms before tooltip is shown on output fields (labels)
+    tooltipDelay: 1000

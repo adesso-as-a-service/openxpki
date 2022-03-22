@@ -223,8 +223,10 @@ sub _build_client {
 
     my $self = shift;
 
+    my $timeout = $self->_config()->{'timeout'};
     my $client = OpenXPKI::Client->new({
         SOCKETFILE => $self->socket(),
+        ($timeout ? (TIMEOUT => $timeout) : ())
     });
 
     if (! defined $client) {
@@ -550,7 +552,7 @@ sub handle_workflow {
             die "No workflow object received!";
         }
 
-        $self->logger()->trace($reply->{workflow});
+        $self->logger()->trace(Dumper $reply->{workflow});
 
     } elsif ($wf_type) {
         $reply = $self->run_command('create_workflow_instance',{
@@ -657,7 +659,7 @@ sub __reinit_session {
         $self->logger()->info('New backend session with id ' . $client_session);
     }
     $session->param('backend_session_id', $client_session);
-    $self->logger()->trace( Dumper $session ) if $self->logger->is_trace;
+    $self->logger()->trace( Dumper $session->dataref ) if $self->logger->is_trace;
 
     return $reply;
 

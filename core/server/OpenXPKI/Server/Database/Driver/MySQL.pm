@@ -56,8 +56,10 @@ sub sqlam_params {
     limit_offset => 'LimitOffset',    # see SQL::Abstract::Limit source code
 }
 
+sub do_sql_replacements { shift; shift } # return input argument
+
 ################################################################################
-# required by OpenXPKI::Server::Database::Role::Driver
+# required by OpenXPKI::Server::Database::Role::SequenceEmulation
 #
 
 sub table_drop_query {
@@ -66,10 +68,6 @@ sub table_drop_query {
         string => "DROP TABLE IF EXISTS $table",
     );
 }
-
-################################################################################
-# required by OpenXPKI::Server::Database::Role::SequenceEmulation
-#
 
 sub sql_autoinc_column { return "INT PRIMARY KEY AUTO_INCREMENT" }
 

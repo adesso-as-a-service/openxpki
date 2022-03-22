@@ -5,7 +5,6 @@ use warnings;
 use English;
 
 use OpenXPKI::DN;
-use Math::BigInt;
 use Digest::SHA qw(sha1_base64 sha1_hex);
 use OpenXPKI::DateTime;
 use MIME::Base64;
@@ -145,11 +144,21 @@ has subject_key_id => (
         my $self = shift;
         my $keyid = $self->_cert()->subject_keyidentifier();
         if ($keyid) {
-            $keyid = unpack 'H*', $self->_cert()->subject_keyidentifier();
-        } else {
-            $keyid = sha1_hex( $self->_cert()->pubkey() );
+            return uc join ':', ( unpack '(A2)*', unpack 'H*', $keyid );
         }
-        return uc join ':', ( unpack '(A2)*', $keyid);
+        return $self->get_public_key_hash();
+    }
+);
+
+has public_key_hash => (
+    is => 'rw',
+    init_arg => undef,
+    isa => 'Str',
+    reader => 'get_public_key_hash',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        return uc join ':', ( unpack '(A2)*', sha1_hex( $self->_cert()->pubkey() ));
     }
 );
 
@@ -208,6 +217,17 @@ has serial => (
     }
 );
 
+has cdp => (
+    is => 'ro',
+    init_arg => undef,
+    isa => 'ArrayRef',
+    reader => 'get_cdp',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        return $self->_cert()->CRLDistributionPoints();
+    }
+);
 
 around BUILDARGS => sub {
 

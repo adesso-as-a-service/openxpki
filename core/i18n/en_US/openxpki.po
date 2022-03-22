@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: OpenXPKI 3.0\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2004-09-08 14:02+0200\n"
-"PO-Revision-Date: 2021-04-26 11:53+0200\n"
+"PO-Revision-Date: 2022-01-27 10:08+0100\n"
 "Last-Translator: OpenXPKI Team <i18n@openxpki.org>\n"
 "Language-Team: OpenXPKI developers list <openxpki-devel@lists.sourceforge."
 "net>\n"
@@ -21,7 +21,13 @@ msgid "I18N_OPENXPKI_UI_APPLICATION_ERROR"
 msgstr "Unknown application error"
 
 msgid "I18N_OPENXPKI_UI_AUTHENTICATION_FAILED"
-msgstr "Authentication failed"
+msgstr "Login with the given credentials failed!"
+
+msgid "I18N_OPENXPKI_UI_AUTHENTICATION_FAILED_TENANT_INVALID"
+msgstr "Authentication failed (tenant information invalid)"
+
+msgid "I18N_OPENXPKI_UI_AUTHENTICATION_FAILED_TENANT_REQUIRED"
+msgstr "Authentication failed (user information incomplete)"
 
 msgid "I18N_OPENXPKI_UI_BACKEND_DID_NOT_REPORT_SUCCESS"
 msgstr "Backend workflow did not report success"
@@ -176,11 +182,25 @@ msgstr "Result of your search query"
 msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_RESULT_TITLE"
 msgstr "Certificate Search Result"
 
+msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SAN_PLACEHOLDER"
+msgstr "exact search for SAN items, type can be given with TYPE:VALUE"
+
+msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SERIAL_PLACEHOLDER"
+msgstr ""
+"serial in decimal or hexadecimal notation, spaces and colons are ignored"
+
 msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SIMILAR_SAN"
 msgstr "Search for certificates with this SAN"
 
 msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SIMILAR_SUBJECT"
 msgstr "Search for certificates with this subject"
+
+msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SUBJECT_PLACEHOLDER"
+msgstr ""
+"executes a substring match on the full certificate DN, wildcards can be used."
+
+msgid "I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_VALIDITY_PLACEHOLDER"
+msgstr "select criteria and timestamp"
 
 msgid "I18N_OPENXPKI_UI_CERTIFICATE_SERIAL"
 msgstr "Certificate Serial"
@@ -368,6 +388,22 @@ msgstr "Challenge password"
 msgid "I18N_OPENXPKI_UI_CSR_KEY_GENERATION_FAILED"
 msgstr "Key generation failed"
 
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_CUST_WORKFLOW_FIELD_REVOCATION_REASON_OPTION"
+msgstr "This is just a prefix"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_CUST_WORKFLOW_FIELD_REVOCATION_REASON_OPTION_CERT"
+msgstr "This is just a prefix"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_CUST_WORKFLOW_FIELD_REVOCATION_REASON_OPTION_DISCONTINUED"
+msgstr "unspecified / other reason"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_CUST_WORKFLOW_FIELD_REVOCATION_REASON_OPTION_KEY"
+msgstr "This is just a prefix"
+
 msgid "I18N_OPENXPKI_UI_DELAYED_REVOCATION_REQUESTED"
 msgstr "Delayed revocation requested."
 
@@ -376,6 +412,9 @@ msgstr "fail"
 
 msgid "I18N_OPENXPKI_UI_DNS_CHECK_OK"
 msgstr "ok"
+
+msgid "I18N_OPENXPKI_UI_DNS_CHECK_PREAMBLE"
+msgstr "FQDNs with DNS lookup result"
 
 msgid "I18N_OPENXPKI_UI_DNS_CHECK_SKIPPED"
 msgstr "n/a"
@@ -536,6 +575,39 @@ msgstr "The specified notafter date must not be equal to the notbefore date."
 
 msgid "I18N_OPENXPKI_UI_ERROR_VALIDATOR_VALIDITY_TIME_NOTAFTER_IN_THE_PAST"
 msgstr "The specified notafter date is in the past."
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION"
+msgstr "Expiry Notification"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_ALERT"
+msgstr "notified (alert)"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_CREATED"
+msgstr "in progress"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_DISABLED"
+msgstr "disabled"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_FAILED"
+msgstr "failed"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_INFO"
+msgstr "notified (info)"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_NOTIFIED"
+msgstr "notified"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_PENDING"
+msgstr "active"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_RENEWED"
+msgstr "renewed"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_SUPPRESS"
+msgstr "suppressed"
+
+msgid "I18N_OPENXPKI_UI_EXPIRY_NOTIFICATION_WARN"
+msgstr "notified (warn)"
 
 msgid "I18N_OPENXPKI_UI_EXPORT_CERTIFICATE_FAILED_TO_LOAD_PRIVATE_KEY"
 msgstr "Failed to export private key (wrong password?)."
@@ -767,8 +839,15 @@ msgstr "Password"
 msgid "I18N_OPENXPKI_UI_LOGIN_PLEASE_LOG_IN"
 msgstr "Please log in"
 
+msgid "I18N_OPENXPKI_UI_LOGIN_REALM_SELECTION_DESC"
+msgstr " "
+
 msgid "I18N_OPENXPKI_UI_LOGIN_SERVICE_UNAVAILABLE"
 msgstr "Login service unavailable"
+
+msgid "I18N_OPENXPKI_UI_LOGIN_STACK_SELECTION_DESC"
+msgstr ""
+"Select the authentication method to use for login from the drop-down list."
 
 msgid "I18N_OPENXPKI_UI_LOGIN_SUBMIT"
 msgstr "Login"
@@ -815,15 +894,24 @@ msgstr "Issue a Certificate Revocation List (CRL)"
 msgid "I18N_OPENXPKI_UI_MENU_CSR_CHECK"
 msgstr "Request Checker"
 
-# Remove?
-msgid "I18N_OPENXPKI_UI_MENU_HEAD_REPORT"
-msgstr "Reports"
+msgid "I18N_OPENXPKI_UI_MENU_ENROLLMENT_SEARCH"
+msgstr "Enrollment Workflow Search"
 
-# Remove?
+msgid "I18N_OPENXPKI_UI_MENU_HEAD_CA_CRL_OPS"
+msgstr "CA/CRL operation"
+
+msgid "I18N_OPENXPKI_UI_MENU_HEAD_ENROLLMENT"
+msgstr "Enrollment RA"
+
+msgid "I18N_OPENXPKI_UI_MENU_HEAD_MISC"
+msgstr "Misc"
+
+msgid "I18N_OPENXPKI_UI_MENU_HEAD_REPORT"
+msgstr "Report"
+
 msgid "I18N_OPENXPKI_UI_MENU_HEAD_SYSTEM_STATUS"
 msgstr "System Information"
 
-# Remove?
 msgid "I18N_OPENXPKI_UI_MENU_HOME"
 msgstr "Home"
 
@@ -836,7 +924,6 @@ msgstr "Manage Secrets"
 msgid "I18N_OPENXPKI_UI_MENU_MY_CERTIFICATE"
 msgstr "My Certificates"
 
-# Remove?
 msgid "I18N_OPENXPKI_UI_MENU_MY_TASK"
 msgstr "My Tasks"
 
@@ -852,7 +939,6 @@ msgstr "Process Information"
 msgid "I18N_OPENXPKI_UI_MENU_PUBLISH_CA_CRL"
 msgstr "Publish CA/CRL"
 
-# Remove?
 msgid "I18N_OPENXPKI_UI_MENU_REPORT_FULL"
 msgstr "Full Certificate Status Report"
 
@@ -869,13 +955,11 @@ msgid "I18N_OPENXPKI_UI_MENU_REVOKE_CERTIFICATE"
 msgstr "Revoke certificate"
 
 msgid "I18N_OPENXPKI_UI_MENU_SCEP_SEARCH"
-msgstr "SCEP Workflow Search"
+msgstr "Enrollment Workflow Search"
 
-# Remove?
 msgid "I18N_OPENXPKI_UI_MENU_SET_MOTD"
 msgstr "Set Message of the Day"
 
-# Remove?
 msgid "I18N_OPENXPKI_UI_MENU_SYSTEM_STATUS"
 msgstr "System Status"
 
@@ -1011,7 +1095,9 @@ msgid "I18N_OPENXPKI_UI_PROFILE_APPLICATION_NAME"
 msgstr "Application Name"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_APPLICATION_NAME_DESC"
-msgstr "The name of the application acting as client."
+msgstr ""
+"The name of the application, added with a colon to the hostname. Three to "
+"twelve charaters (a-z, 0-9, dash, underscore)."
 
 msgid "I18N_OPENXPKI_UI_PROFILE_BASIC_STYLE_DESC"
 msgstr ""
@@ -1066,11 +1152,30 @@ msgstr "Hostname"
 msgid "I18N_OPENXPKI_UI_PROFILE_HOSTNAME_DESC"
 msgstr "Enter the fully qualified hostname (domain name) of your system."
 
+msgid "I18N_OPENXPKI_UI_PROFILE_LOCALITY_DESC"
+msgstr "Locality Name"
+
 msgid "I18N_OPENXPKI_UI_PROFILE_OCSP_RESPONDER_LABEL"
 msgstr "OCSP Responder"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_OU_DESC"
 msgstr "Organizational Unit"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_OWNER_CONTACT"
+msgstr "Owner (Email)"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_OWNER_CONTACT_DESC"
+msgstr ""
+"Email adress of the certificate owner. This is used for e.g. sending the "
+"expiry notifications."
+
+msgid "I18N_OPENXPKI_UI_PROFILE_OWNER_GROUP"
+msgstr "Owner (Group)"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_OWNER_GROUP_DESC"
+msgstr ""
+"Support group that owns this certificate.  This is used for e.g. sending the "
+"expiry notifications."
 
 msgid "I18N_OPENXPKI_UI_PROFILE_O_DESC"
 msgstr "Organization name"
@@ -1087,6 +1192,9 @@ msgstr "Port"
 msgid "I18N_OPENXPKI_UI_PROFILE_PORT_DESC"
 msgstr "Port number"
 
+msgid "I18N_OPENXPKI_UI_PROFILE_RATOKEN_LABEL"
+msgstr "RA/SCEP Token"
+
 msgid "I18N_OPENXPKI_UI_PROFILE_REALNAME"
 msgstr "Realname"
 
@@ -1097,25 +1205,31 @@ msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_AFFILIATION"
 msgstr "Affiliation"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_AFFILIATION_DESC"
-msgstr "Requestor affiliation"
+msgstr "Requester affiliation"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_EMAIL"
 msgstr "Email address"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_EMAIL_DESC"
-msgstr "Requestor email"
+msgstr "Requester email"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_FIRSTNAME"
 msgstr "Firstname"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_FIRSTNAME_DESC"
-msgstr "Requestor first name"
+msgstr "Requester first name"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_LASTNAME"
 msgstr "Lastname"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_LASTNAME_DESC"
-msgstr "Requestor last name"
+msgstr "Requester last name"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_REALNAME"
+msgstr "Requester Name"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_REQUESTOR_REALNAME_DESC"
+msgstr "The full name of the requester"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_SAN_DNS"
 msgstr "DNS"
@@ -1141,8 +1255,14 @@ msgstr "URI"
 msgid "I18N_OPENXPKI_UI_PROFILE_SAN_URI_DESCRIPTION"
 msgstr "URI"
 
+msgid "I18N_OPENXPKI_UI_PROFILE_STATE_DESC"
+msgstr "State or Province Name"
+
 msgid "I18N_OPENXPKI_UI_PROFILE_TLS_CLIENT_LABEL"
 msgstr "TLS Client"
+
+msgid "I18N_OPENXPKI_UI_PROFILE_TLS_DUAL_LABEL"
+msgstr "TLS Client/Server (Dual Auth)"
 
 msgid "I18N_OPENXPKI_UI_PROFILE_TLS_SERVER_LABEL"
 msgstr "TLS/Web Server"
@@ -1236,6 +1356,9 @@ msgstr "Export Result"
 msgid "I18N_OPENXPKI_UI_SEARCH_HAS_NO_MATCHES"
 msgstr "Your query did not return any matches!"
 
+msgid "I18N_OPENXPKI_UI_SEARCH_METADATA_PLACEHOLDER"
+msgstr "search filters depend on attribute, see below"
+
 msgid "I18N_OPENXPKI_UI_SEARCH_NEW_SEARCH"
 msgstr "New Search"
 
@@ -1251,13 +1374,13 @@ msgstr ""
 "allowed."
 
 msgid "I18N_OPENXPKI_UI_SEARCH_REQUESTOR_EMAIL_LABEL"
-msgstr "Requestor Email"
+msgstr "Requester Email"
 
 msgid "I18N_OPENXPKI_UI_SEARCH_REQUESTOR_NAME_HINT"
-msgstr "Filter on the name of the requestor. Query is used as substring."
+msgstr "Filter on the name of the requester. Query is used as substring."
 
 msgid "I18N_OPENXPKI_UI_SEARCH_REQUESTOR_NAME_LABEL"
-msgstr "Requestor"
+msgstr "Requester"
 
 msgid "I18N_OPENXPKI_UI_SEARCH_RESULT_EXPIRED_OR_EMPTY"
 msgstr "Search result expired or empty!"
@@ -1314,6 +1437,9 @@ msgstr "Key Check Value does not match secret"
 
 msgid "I18N_OPENXPKI_UI_SECRET_UNLOCK_LABEL"
 msgstr "Unlock"
+
+msgid "I18N_OPENXPKI_UI_STACK_HINT_LIST"
+msgstr "Login Methods"
 
 msgid "I18N_OPENXPKI_UI_SUPPORT_TRAILER"
 msgstr ""
@@ -1518,6 +1644,9 @@ msgstr "Validator failed on given expression"
 msgid "I18N_OPENXPKI_UI_VALIDATOR_REGEX_FQDN_FAILED"
 msgstr "Given FQDN has an invalid format"
 
+msgid "I18N_OPENXPKI_UI_VALIDATOR_REGEX_HREF_FAILED"
+msgstr "Please provide a well-formed URL starting with http(s)://"
+
 msgid "I18N_OPENXPKI_UI_VALIDATOR_VALIDITY_STRING_FAILED"
 msgstr "The entered date/time could not be validated."
 
@@ -1548,8 +1677,8 @@ msgstr "Welcome to your OpenXPKI Trustcenter"
 msgid "I18N_OPENXPKI_UI_WF_TYPE_MOTD_LABEL"
 msgstr "Message of the Day"
 
-msgid "I18N_OPENXPKI_UI_WORKFLOW_ACCESS_NOT_ALLOWED_FOR_ROLE"
-msgstr "Access to this workflow is forbidden for your current role"
+msgid "I18N_OPENXPKI_UI_WORKFLOW_ABORT_BUTTON"
+msgstr "Cancel"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACCESS_NOT_ALLOWED_FOR_USER"
 msgstr "Access to this workflow is forbidden for the current user"
@@ -1657,7 +1786,7 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CRR_SUBMIT_DESC"
 msgstr "Submit your revocation request to the certification office."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CRR_SUBMIT_LABEL"
-msgstr "Submit request"
+msgstr "Submit Request"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_APPROVE_CSR_DESC"
 msgstr ""
@@ -1709,7 +1838,8 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_EDIT_VALIDITY_DESC"
 msgstr ""
 "If you like to change the validity of the certificate, enter a custom "
 "notbefore/notafter date into the fields. Note that all dates are handled in "
-"UTC timezone!"
+"UTC timezone! An absolute notafter date overules any other relative validity "
+"options."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_EDIT_VALIDITY_LABEL"
 msgstr "Edit Validity"
@@ -1774,6 +1904,12 @@ msgstr "Select Profile"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_SET_ISSUER_LABEL"
 msgstr "Set Issuer"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_SET_VALIDITY_DESC"
+msgstr " "
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_SET_VALIDITY_LABEL"
+msgstr "Certificate Validity"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_CSR_SUBMIT_DESC"
 msgstr "Submit request"
@@ -1924,6 +2060,9 @@ msgstr "Unlock transaction"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_REPORT_DETAIL_INITIALIZE_LABEL"
 msgstr "Define Report Options"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_REPORT_SUMMARY_INITIALIZE_LABEL"
+msgstr "Define Report Options"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_RESETPASS_ASK_CLIENT_PASSWORD_DESC"
 msgstr " "
 
@@ -1987,6 +2126,9 @@ msgstr "Please update / complete the information below."
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_UPDATE_CRR_LABEL"
 msgstr "Update Request"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_ARCHIVE_AT_LABEL"
+msgstr "Archive at"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ATTRIBUTE_LABEL"
 msgstr "Workflow Attributes"
 
@@ -2044,6 +2186,9 @@ msgstr "Submit with Policy Exception"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_BUTTON_POLICY_VIOLATION_RECHECK_LABEL"
 msgstr "Re-Evaluate Policy"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_BUTTON_SET_VALIDITY_LABEL"
+msgstr "Change Validity"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_CANCEL_BUTTON"
 msgstr "Cancel Request"
 
@@ -2075,8 +2220,17 @@ msgstr "You are not allowed to initiate this workflow"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_CREATE_UNKNOWN_TYPE"
 msgstr "Cannot initiate workflow: type unknown"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_CREATOR_ANONYMOUS"
+msgstr "anonymous user"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_CREATOR_LABEL"
 msgstr "Creator"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_CREATOR_NO_NAMESPACE"
+msgstr "Creator has no namespace set"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_CREATOR_UNABLE_TO_RESOLVE"
+msgstr "Unable to resolve creator in given namespace"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ERROR_DELAY_REVOCATION_TIME_NOT_IN_FUTURE"
 msgstr "The time given for delayed revocation is not in the future."
@@ -2189,7 +2343,7 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_INFO_DESC"
 msgstr "Information about the Request."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_INFO_LABEL"
-msgstr "Requestor Information"
+msgstr "Requester Information"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_INFO_PLACEHOLDER"
 msgstr " "
@@ -2275,6 +2429,18 @@ msgstr " "
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_SUBJECT_TOOLTIP"
 msgstr " "
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_VALIDITY_DESC"
+msgstr "The validity period of the certificate."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_VALIDITY_LABEL"
+msgstr "Certificate Validity"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_VALIDITY_OPTION_DEFAULT"
+msgstr "default validity"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CERT_VALIDITY_OPTION_SHORT"
+msgstr "short validity (45 days)"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CHAIN_DESC"
 msgstr " "
 
@@ -2287,6 +2453,9 @@ msgstr "~"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CHAIN_TOOLTIP"
 msgstr ""
 "Copy the required chain certificates as concatenated PEM or PKCS7 bundle"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CHECK_POLICY_DNS_LABEL"
+msgstr "Failed Policy Check DNS"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CLIENT_IP_DESC"
 msgstr "IP address of the incoming client connection."
@@ -2319,10 +2488,10 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CRR_INFO_LABEL"
 msgstr "Extra Information"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CSR_SUBJECT_DESC"
-msgstr "Request Subject"
+msgstr "The requests subject"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CSR_SUBJECT_LABEL"
-msgstr "The requests subject"
+msgstr "Request Subject"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_CSR_TYPE_DESC"
 msgstr "Type of CSR (PCKS10, server generated, SPKAC"
@@ -2494,14 +2663,36 @@ msgstr "certificate holders email address"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_EMAIL_TOOLTIP"
 msgstr " "
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_EXPIRY_NOTIFICATION_DESC"
+msgstr " "
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_EXPIRY_NOTIFICATION_LABEL"
+msgstr "Expiry-Notification"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_OWNER_CONTACT_DESC"
+msgstr ""
+"Email adress of the certificate owner. This is used for e.g. sending the "
+"expiry notifications."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_OWNER_CONTACT_LABEL"
+msgstr "Owner (Email)"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_OWNER_GROUP_DESC"
+msgstr ""
+"Support group that owns this certificate.  This is used for e.g. sending the "
+"expiry notifications."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_OWNER_GROUP_LABEL"
+msgstr "Owner (Group)"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_REQUESTOR_DESC"
 msgstr " "
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_REQUESTOR_LABEL"
-msgstr "Requestor/Owner"
+msgstr "Requester/Owner"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_REQUESTOR_PLACEHOLDER"
-msgstr "Name of the Requestor/Owner"
+msgstr "Name of the Requester/Owner"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_REQUESTOR_TOOLTIP"
 msgstr " "
@@ -2551,6 +2742,12 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_NOTBEFORE_TOOLTIP"
 msgstr ""
 "Use the calendar icon or enter a date in MM.DD.YYYY format, type 0 to use "
 "the default. Dates are in UTC timezone!"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_NOTIFY_EXPIRY_MESSAGE_LABEL"
+msgstr "Notification"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_NOTIFY_EXPIRY_RCPT_LABEL"
+msgstr "Recipient"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_ONHOLD_COMMENT_DESC"
 msgstr "Describe the reason why you want to set the request on hold."
@@ -2615,6 +2812,23 @@ msgstr ""
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS10_TOOLTIP"
 msgstr "Your PKCS10 encoded request"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_DESC"
+msgstr ""
+" Paste your PKCS7 formated certificate bundle directly into the field or use "
+"the upload button to load a file from your local computer"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_LABEL"
+msgstr "PKCS7"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_PLACEHOLDER"
+msgstr ""
+" Please paste your PEM encoded request here (must look like  -----BEGIN "
+"PKCS7-----) or use the browse/upload button below to load a file from your "
+"computer."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_TOOLTIP"
+msgstr "Your PEM formatted PKCS7 encoded container"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_POLICY_CERTIFICATE_KEY_DUPLICATE"
 msgstr "Duplicated Key Certificates"
 
@@ -2668,6 +2882,10 @@ msgstr "Please set the reason for revocation"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REASON_CODE_TOOLTIP"
 msgstr "Specify the reason why you want the certificate being revoked."
 
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REASON_DESC"
+msgstr "The reason code indicates the reason why the certificate was revoked."
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REJECT_COMMENT_DESC"
 msgstr ""
 "Reason for rejecting this request. This comment is visible to the user."
@@ -2719,6 +2937,24 @@ msgstr "Reset Password"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_RESETPASS_RESET_PASSWORD_PLACEHOLDER"
 msgstr " "
 
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REVOCATION_TIME_DESC"
+msgstr ""
+"With delayed revocation you can schedule a revocation for a date in the "
+"future."
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REVOCATION_TIME_LABEL"
+msgstr "Delayed Revocation"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REVOCATION_TIME_PLACEHOLDER"
+msgstr "usually not required, use the selector on the right or type a datetime"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REVOCATION_TIME_TOOLTIP"
+msgstr "the revocation will be scheduled after the given date"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_RUN_IN_BACKGROUND_DESC"
 msgstr ""
 "Tick this box to let the workflow detach from the UI and execute in the "
@@ -2749,7 +2985,7 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_CERT_IDENTIFIER_LABEL"
 msgstr "Signer Certificate"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_CERT_LABEL"
-msgstr "Requestor/Signer"
+msgstr "Requester/Signer"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_CHAIN_DESC"
 msgstr " "
@@ -2761,7 +2997,7 @@ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_DN_DESC"
 msgstr " "
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_DN_LABEL"
-msgstr "Requestor/Signer"
+msgstr "Requester/Signer"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_REVOKED_LABEL"
 msgstr "Signer is Revoked"
@@ -2792,6 +3028,9 @@ msgstr "Transaction Id of this request"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_TRANSACTION_ID_LABEL"
 msgstr "Transaction ID"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_USER_AGENT_LABEL"
+msgstr "User-Agent"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_VALID_CHALLENGE_PASSWORD_LABEL"
 msgstr "Has Valid Password"
@@ -2836,23 +3075,46 @@ msgstr ""
 "undone!</b><br><br>Pressing 'Abort' will leave the workflow untouched."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_FAILURE_BUTTON"
-msgstr "Force Failure"
+msgstr "Discard"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_FAILURE_DIALOG_CANCEL_BUTTON"
-msgstr "Abort"
+msgstr "Back"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_FAILURE_DIALOG_CONFIRM_BUTTON"
-msgstr "Fail Workflow"
+msgstr "Discard Workflow"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_FAILURE_DIALOG_LABEL"
-msgstr "Fail Workflow"
+msgstr "Discard Workflow"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_FAILURE_DIALOG_TEXT"
 msgstr ""
-"Press the confirm button to mark this workflow as failed. This will "
-"immediately stop all actions on this workflow and mark it as failed. <b>This "
-"action can not be undone!</b><br><br>If you want to keep this workflow, "
-"press the abort button to close this window without touching the workflow."
+"Press <i>Discard Workflow</i> to mark this workflow as failed. This will not "
+"run any more actions on this workflow and immediately stop it. <b>This "
+"action can not be undone!</b><br><br>To continue with the workflow, press "
+"the <i>Back</i> button."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_BUTTON"
+msgstr "Reset"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_CANCEL_BUTTON"
+msgstr "Abort"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_CONFIRM_BUTTON"
+msgstr "Reset Workflow"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_LABEL"
+msgstr "Reset Workflow"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_TEXT"
+msgstr ""
+"Press the confirm button to reset this workflow to the previous state. In "
+"case the workflow is still marked as <i>running</i> you must double check "
+"that no node in your cluster is currently working on this workflow as you "
+"will otherwise loose data!  After the reset, please review the workflow "
+"immediately and take appropriate actions to either continue it or fail it "
+"finally to avoid any uncontrolled access to it.<br>If you want to leave this "
+"workflow in its current state, press the abort button to close this window "
+"without touching the workflow."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESUME_BUTTON"
 msgstr "Resume"
@@ -2911,8 +3173,13 @@ msgstr "User"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_ID_LABEL"
 msgstr "Workflow Id"
 
-msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO"
-msgstr "Technical Log"
+msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_ARCHIVED_DESC"
+msgstr ""
+"This workflow has been archived. Use the 'Open Workflow' button to show the "
+"details of the workflow."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_ARCHIVED_LABEL"
+msgstr "Archived"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_DESC"
 msgstr ""
@@ -2924,13 +3191,21 @@ msgstr ""
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_LABEL"
 msgstr "Unexpected error"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_FAILED_DESC"
+msgstr ""
+"This workflow has been manually discarded. Use the 'Open Workflow' button to "
+"show more details."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_FAILED_LABEL"
+msgstr "Discarded"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_DESC"
 msgstr ""
 "This workflow is in a final state. Use the 'Open Workflow' button to show "
-"the details of the workflow."
+"more details."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_LABEL"
-msgstr "Workflow finished"
+msgstr "Finished"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_MANUAL_DESC"
 msgstr ""
@@ -2949,7 +3224,7 @@ msgstr ""
 "(additional authorization might be required)."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_PAUSE_LABEL"
-msgstr "Workflow paused"
+msgstr "Paused"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_RETRY_EXCEEDED_DESC"
 msgstr ""
@@ -2964,7 +3239,7 @@ msgstr "Loop retries exceeded"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_DESC"
 msgstr ""
 "This workflow is currently executed by the server. Use the 'Open Workflow' "
-"button to show the details of the workflow."
+"button to show more details."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_LABEL"
 msgstr "Workflow running"
@@ -2987,6 +3262,11 @@ msgstr "last update after"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_LAST_UPDATE_BEFORE_LABEL"
 msgstr "last update before"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_LAST_UPDATE_HINT"
+msgstr ""
+"Find only workflows that have been update last after/before the given "
+"timestamp."
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_LAST_UPDATE_LABEL"
 msgstr "Last Update"
 
@@ -3004,6 +3284,9 @@ msgstr "Priority"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_LOG_TIMESTAMP_LABEL"
 msgstr "Timestamp"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_METADATA_LABEL"
+msgstr "Metadata"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_MOTD_FIELD_LEVEL_DESCRIPTION"
 msgstr ""
@@ -3054,29 +3337,11 @@ msgstr "Paused action"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_PAUSE_REASON_LABEL"
 msgstr "Pause Reason"
 
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE"
-msgstr "Process State"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_ARCHIVED"
-msgstr "archived"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_EXCEPTION"
-msgstr "exception"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_FINISHED"
-msgstr "finished"
+msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_HINT"
+msgstr "The internal processing state of the workflow."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_LABEL"
 msgstr "Run State"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_MANUAL"
-msgstr "manual"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_PAUSE"
-msgstr "paused"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_RETRY_EXCEEDED"
-msgstr "retry exceeded"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_PROPERTY_ACCESS_NOT_ALLOWED_FOR_ROLE"
 msgstr "Access to this workflow property is forbidden for your current role"
@@ -3146,11 +3411,22 @@ msgstr "Requested action not available - opening current state"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_RESET_BUTTON"
 msgstr "Go Back"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_HINT"
+msgstr ""
+"Show only workflows owned by the given creator, exact match, including the "
+"namespace prefix, if set. Can contain '*' and '?' wildcard."
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_LABEL"
 msgstr "Creator"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_PLACEHOLDER"
+msgstr "exact match for creator, including namespace prefix, wildcards allowed"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_DESC"
 msgstr "Search for workflows using the filters below."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_FIELD_HINT_LIST"
+msgstr "Explanation on the search filters:"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_LABEL"
 msgstr "Search for Workflows"
@@ -3173,11 +3449,22 @@ msgstr "Search the database"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_SERIAL_LABEL"
 msgstr "Workflow Id"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_HINT"
+msgstr ""
+"Find only workflows that are in the given state, exact match only, no "
+"wildcards are allowed but multiple states can be given separated by space."
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_LABEL"
 msgstr "State"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_PLACEHOLDER"
+msgstr "exact match of an internal state name, e.g. SUCCESS or PENDING"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_SUBMIT_LABEL"
 msgstr "Search now"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_TYPE_HINT"
+msgstr "Filter on the selected workflow type."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_TYPE_LABEL"
 msgstr "Type"
@@ -3198,9 +3485,6 @@ msgstr "Message set"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_START_BUTTON"
 msgstr "Start Workflow"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE"
-msgstr "State"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_ADDUSER_CHOOSE_ACTION_DESC"
 msgstr ""
@@ -3299,6 +3583,10 @@ msgstr "This workflow failed finally."
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CRR_FAILURE_LABEL"
 msgstr "FAILURE"
+
+#, fuzzy
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CRR_INITIAL_DESC"
+msgstr "This workflow failed finally and can not be restarted"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CRR_INITIAL_LABEL"
 msgstr " "
@@ -3483,6 +3771,9 @@ msgstr ""
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_EXPORT_PRIVATEKEY_SUCCESS_LABEL"
 msgstr "SUCCESS"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_FAILED"
+msgstr "This workflow failed finally"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_FAILURE_DESC"
 msgstr "This workflow failed finally and can not be restarted"
 
@@ -3543,6 +3834,12 @@ msgstr "The changes have been persisted to the database."
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_METADATA_SUCCESS_LABEL"
 msgstr "Metadata was updated"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_META_BULK_PENDING_DESC"
+msgstr "This metadata update request requires approval."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_META_BULK_PENDING_LABEL"
+msgstr "Approval Pending"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_PAUSE_DESC"
 msgstr ""
 "This workflow has been paused and will be continued later by the system. You "
@@ -3556,6 +3853,15 @@ msgstr ""
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_POLICY_VIOLATION_LABEL"
 msgstr "Policy Violation Pending"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_RATOKEN_CERT_EXISTS_DESC"
+msgstr ""
+"A valid certificate for the RA token was found so there should be no need to "
+"generate a new one. Note that this workflow will <b>not</b> revoke the old "
+"certificate in case you decide to continue."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_RATOKEN_CERT_EXISTS_LABEL"
+msgstr "Valid RA Token exists"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_REJECTED_DESC"
 msgstr "The request was finally rejected and can not be restartet."
@@ -3615,15 +3921,6 @@ msgstr ""
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_RUNNING_LABEL"
 msgstr "This workflow is currently running on the server."
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_SCEP_TOKEN_CERT_EXISTS_DESC"
-msgstr ""
-"A valid certificate for the SCEP RA was found so there should be no need to "
-"generate a new one. Note that this workflow will <b>not</b> revoke the old "
-"certificate in case you decide to continue. "
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_SCEP_TOKEN_CERT_EXISTS_LABEL"
-msgstr "Found Valid SCEP Token "
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_SEARCH_SCEP_NORESULT_DESC"
 msgstr "No result matching your search criteria could be found."
@@ -3756,6 +4053,12 @@ msgstr "Change a certificates metadata."
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_CHANGE_METADATA_LABEL"
 msgstr "Change Metadata"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_CRL_IMPORT_DESC"
+msgstr "Import certificate revocation lists from external CAs"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_CRL_IMPORT_LABEL"
+msgstr "CRL Import"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_CRL_ISSUANCE_DESC"
 msgstr "Issue certificate revocation lists."
 
@@ -3792,6 +4095,14 @@ msgstr "Private Key Download"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_LABEL"
 msgstr "Type"
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_META_BULK_DESC"
+msgstr ""
+"This workflow allows the update of metadata for multiple certificates at "
+"once. You need to provide a list of certificate identifiers."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_META_BULK_LABEL"
+msgstr "Bulk Metadata Update Request"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_NOTIFY_EXPIRY_DESC"
 msgstr ""
 "Send out expiry notifications via email for all certs expiring within the "
@@ -3799,6 +4110,18 @@ msgstr ""
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_NOTIFY_EXPIRY_LABEL"
 msgstr "Certificate Expiry Notification"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_NOTIFY_EXPIRY_MESSAGE_DESC"
+msgstr " "
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_NOTIFY_EXPIRY_MESSAGE_LABEL"
+msgstr "Expiry Notification (email)"
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_RATOKEN_DESC"
+msgstr "Generate a new RA token in case the old one is near its expiration."
+
+msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_RATOKEN_LABEL"
+msgstr "Update RA Token"
 
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_RELEASE_LOCK_DESC"
 msgstr ""
@@ -3848,13 +4171,6 @@ msgstr "Search for enrollment workflows by transaction id"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SCEP_SEARCH_LABEL"
 msgstr "Enrollment Search"
 
-#, fuzzy
-msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SCEP_TOKEN_DESC"
-msgstr "Search for SCEP workflows by  transaction id"
-
-msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SCEP_TOKEN_LABEL"
-msgstr "Generate SCEP RA Token"
-
 msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SHOW_METADATA_DESC"
 msgstr "Display the metadata associated with a certificate"
 
@@ -3874,12 +4190,25 @@ msgstr "Import to Trustgroup"
 msgid "I18N_OPENXPKI_UI_WORKFLOW_UNABLE_TO_LOAD_WORKFLOW_INFORMATION"
 msgstr "Unable to load workflow information."
 
+msgid "I18N_OPENXPKI_UI_WORKFLOW_USER_AGENT_DESC"
+msgstr "The User-Agent string send by the client"
+
 msgid "I18N_OPENXPKI_UI_WORKFLOW_WAKEUP_AT_LABEL"
 msgstr "Wake Up"
 
 # Remove?
 msgid "I18N_OPENXPKI_UI_YES"
 msgstr "Yes"
+
+#~ msgid "I18N_OPENXPKI_UI_CERTIFICATE_SERIAL_HINT"
+#~ msgstr ""
+#~ "Find a certificate by its serial number. In hexadecimal notation, spaces "
+#~ "and colons will be ignored."
+
+# Remove?
+#, fuzzy
+#~ msgid "I18N_OPENXPKI_UI_CUST"
+#~ msgstr "Yes"
 
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_CUST_WORKFLOW_FIELD_CI_STATUS_OK_LABEL"
@@ -3963,9 +4292,6 @@ msgstr "Yes"
 #~ msgid "I18N_OPENXPKI_UI_PROFILE_SAN_GUID_DESCRIPTION"
 #~ msgstr "GUID"
 
-#~ msgid "I18N_OPENXPKI_UI_PROFILE_SAN_UPN"
-#~ msgstr "UPN"
-
 #~ msgid "I18N_OPENXPKI_UI_PROFILE_SAN_UPN_DESCRIPTION"
 #~ msgstr "UPN"
 
@@ -4012,6 +4338,12 @@ msgstr "Yes"
 #~ msgid "I18N_OPENXPKI_UI_VALIDATOR_KEYLENGTH_KEY_TOO_SHORT"
 #~ msgstr "The provided key is too short"
 
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACCESS_NOT_ALLOWED"
+#~ msgstr "You are not allowed to access this workflow"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACCESS_NOT_ALLOWED_FOR_ROLE"
+#~ msgstr "Access to this workflow is forbidden for your current role"
+
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_APPROVE_LABEL"
 #~ msgstr "Approve"
 
@@ -4056,17 +4388,11 @@ msgstr "Yes"
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_OPENVPN_EXPORT_INITIALIZE_LABEL"
 #~ msgstr "Set Information"
 
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_REPORT_SUMMARY_INITIALIZE_LABEL"
-#~ msgstr "Define Report Options"
-
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_SCEPGETCA_INITIALIZE_LABEL"
 #~ msgstr "Set Parameters"
 
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ACTION_SCPU_GENERATE_ACT_CODE"
 #~ msgstr "Generate Code"
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_ARCHIVE_AFTER_LABEL"
-#~ msgstr "Archive after"
 
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_BUTTON_APPROVE"
 #~ msgstr "Approve Request"
@@ -4107,22 +4433,8 @@ msgstr "Yes"
 #~ msgstr "Request is SelfSigned"
 
 #, fuzzy
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ARS_GROUP_DESC"
-#~ msgstr " "
-
-#, fuzzy
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ARS_GROUP_LABEL"
-#~ msgstr "Requestor/Owner"
-
-#, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ARS_GROUP_PLACEHOLDER"
-#~ msgstr "Name of the Requestor/Owner"
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ENDPOINT_DESC"
-#~ msgstr " The server endpoint used for the request."
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ENDPOINT_LABEL"
-#~ msgstr "Endpoint / Server"
+#~ msgstr "Name of the Requester/Owner"
 
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_ENDPOINT_PLACEHOLDER"
@@ -4135,23 +4447,6 @@ msgstr "Yes"
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_META_META_ENDPOINT_TOOLTIP"
 #~ msgstr " "
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_DESC"
-#~ msgstr ""
-#~ " Paste your PKCS7 formated certificate bundle directly into the field or "
-#~ "use the upload button to load a file from your local computer"
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_LABEL"
-#~ msgstr "PKCS7"
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_PLACEHOLDER"
-#~ msgstr ""
-#~ " Please paste your PEM encoded request here (must look like  -----BEGIN "
-#~ "PKCS7-----) or use the browse/upload button below to load a file from "
-#~ "your computer."
-
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_PKCS7_TOOLTIP"
-#~ msgstr "Your PEM formatted PKCS7 encoded container"
 
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_REPLACE_CERT_IDENTIFIER_DESC"
 #~ msgstr "The certificate to be replaced by this workflow."
@@ -4171,8 +4466,35 @@ msgstr "Yes"
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_FIELD_SIGNER_SUBJECT_MATCH_LABEL"
 #~ msgstr "Request Subject Matches"
 
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_ARCHIVED_DESC"
-#~ msgstr "This workflow was archived."
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_INFO"
+#~ msgstr "Technical Log"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_EXCEPTION"
+#~ msgstr "exception"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_FAILED"
+#~ msgstr "failed"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_FINISHED"
+#~ msgstr "finished"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_MANUAL"
+#~ msgstr "manual"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_PAUSE"
+#~ msgstr "paused"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_RETRY_EXCEEDED"
+#~ msgstr "retry exceeded"
+
+#, fuzzy
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_SEARCH_META_CERT_SUBJECT_HINT"
+#~ msgstr ""
+#~ "Find only workflows that are in the given state, exact match only, no "
+#~ "wildcards are allowed but multiple states can be given separated by space."
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE"
+#~ msgstr "State"
 
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CERT_AUTH_INITIAL_DESC"
@@ -4184,10 +4506,6 @@ msgstr "Yes"
 
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CRL_ISSUE_INITIAL_LABEL"
 #~ msgstr "Issue CRL"
-
-#, fuzzy
-#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CRR_INITIAL_DESC"
-#~ msgstr "This workflow failed finally and can not be restarted"
 
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_STATE_CSR_ENTER_CERT_INFO_DESC"
@@ -4356,6 +4674,9 @@ msgstr "Yes"
 
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SCEPGETCA_LABEL"
 #~ msgstr "Manage SCEP GetCA"
+
+#~ msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SCEP_TOKEN_LABEL"
+#~ msgstr "Generate SCEP RA Token"
 
 #, fuzzy
 #~ msgid "I18N_OPENXPKI_UI_WORKFLOW_TYPE_SMARTCARD_FETCH_PUK_DESC"

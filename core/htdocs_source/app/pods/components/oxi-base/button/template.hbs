@@ -6,7 +6,7 @@
         target="{{@button.target}}"
     >
         {{#if @button.tooltip}}
-            <BsTooltip @title={{@button.tooltip}}/>
+            <EmberTooltip>{{@button.tooltip}}</EmberTooltip>
         {{/if}}
         {{#if @button.image}}
             <img src={{@button.image}}/>
@@ -18,13 +18,13 @@
 
     <BsButton
         ...attributes
-        @type={{this.buttonType}}
+        @type="light"
         class="{{if @button.loading "oxi-btn-loading"}} {{this.additionalCssClass}}"
         @onClick={{this.click}}
         disabled={{@button.disabled}}
     >
         {{#if @button.tooltip}}
-            <BsTooltip @title={{@button.tooltip}}/>
+            <EmberTooltip>{{@button.tooltip}}</EmberTooltip>
         {{/if}}
         {{#if @button.image}}
             <img src={{@button.image}}/>

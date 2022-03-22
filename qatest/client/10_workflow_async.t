@@ -64,12 +64,12 @@ sub workflow_def {
                 'label' => 'I18N_OPENXPKI_UI_WORKFLOW_ACTION_MOTD_INITIALIZE_LABEL',
                 'description' => 'I18N_OPENXPKI_UI_WORKFLOW_ACTION_MOTD_INITIALIZE_DESCRIPTION',
             },
-            'do_something' => {
-                'class' => 'OpenXPKI::Test::Is13Prime',
-            },
             'pause_before_fork' => {
                 'class' => 'OpenXPKI::Server::Workflow::Activity::Tools::Disconnect',
                 'param' => { 'pause_info' => 'We want this to be picked up by the watchdog' },
+            },
+            'do_something' => {
+                'class' => 'OpenXPKI::Test::Is13Prime',
             },
         },
         'field' => {},
@@ -89,19 +89,19 @@ my $oxitest = OpenXPKI::Test->new(
     },
 );
 
-my $tester = $oxitest->new_client_tester;
-$tester->login("democa" => "caop");
+my $client = $oxitest->new_client_tester;
+$client->login("democa" => "caop");
 
 sub wait_for_proc_state {
     my ($wfid, $state_regex) = @_;
-    my $testname = "Waiting for workflow state $state_regex";
+
     my $result;
     my $count = 0;
     while ($count++ < 20) {
-        $result = $tester->send_command_ok("search_workflow_instances" => { id => [ $wfid ] });
+        $result = $client->send_command_ok("search_workflow_instances" => { id => [ $wfid ] });
         # no workflow found?
         if (not scalar @$result or $result->[0]->{'workflow_id'} != $wfid) {
-            BAIL_OUT("Workflow with ID $wfid not found");
+            die("Workflow with ID $wfid not found");
         }
         # wait if paused (i.e. resuming in progress) or still running (the remaining steps)
         if (not $result->[0]->{'workflow_proc_state'} =~ $state_regex) {
@@ -109,21 +109,21 @@ sub wait_for_proc_state {
             next;
         }
         # expected proc state reached
-        ok $testname;
-        return $result;
+        return 1;
     }
-    BAIL_OUT("Timeout reached while waiting for workflow to reach state $state_regex");
+    die("Timeout reached while waiting for workflow to reach state $state_regex");
 }
+
 my $result;
 
 lives_and {
-    $result = $tester->send_command_ok("create_workflow_instance" => {
+    $result = $client->send_command_ok("create_workflow_instance" => {
         workflow => "wf_type_1",
     });
 } "create_workflow_instance()";
 
-my $wf = $result->{workflow} or BAIL_OUT('Workflow data not found');
-my $wf_id = $wf->{id} or BAIL_OUT('Workflow ID not found');
+my $wf = $result->{workflow} or die('Workflow data not found');
+my $wf_id = $wf->{id} or die('Workflow ID not found');
 
 ##diag explain OpenXPKI::Workflow::Config->new->workflow_config;
 
@@ -131,35 +131,31 @@ my $wf_id = $wf->{id} or BAIL_OUT('Workflow ID not found');
 # wait for wakeup by watchdog
 #
 note "waiting for backgrounded (forked) workflow to finish";
-$result = wait_for_proc_state $wf_id, qr/^(finished|exception)$/;
-
-# compare result
-cmp_deeply $result, [ superhashof({
-    'workflow_id' => $wf_id,
-    'workflow_proc_state' => 'finished', # could be 'exception' if things go wrong
-    'workflow_state' => 'SUCCESS',
-}) ], "Workflow finished successfully" or diag explain $result;
+wait_for_proc_state $wf_id, qr/^(finished|exception)$/;
 
 #
 # get_workflow_info - check action results
 #
 lives_and {
-    $result = $tester->send_command_ok("get_workflow_info" => { id => $wf_id });
-    cmp_deeply $result->{workflow}->{context}->{is_13_prime}, 1;
-} "Workflow action returns correct result";
+    $result = $client->send_command_ok("get_workflow_info" => { id => $wf_id });
+    cmp_deeply $result->{workflow}, superhashof( {
+        'proc_state' => 'finished', # could be 'exception' if things go wrong
+        'state' => 'SUCCESS',
+        'context' => superhashof( { 'is_13_prime' => 1 } ),
+    } );
+} "Workflow finished successfully and with correct action result";
 
 #
 # get_workflow_history - check correct execution history
 #
 lives_and {
-    $result = $tester->send_command_ok("get_workflow_history" => { id => $wf_id });
+    $result = $client->send_command_ok("get_workflow_history" => { id => $wf_id });
     cmp_deeply $result, [
-        superhashof({ workflow_state => "INITIAL", workflow_action => re(qr/create/i) }),
-        superhashof({ workflow_state => "INITIAL", workflow_action => re(qr/initialize/i) }),
-        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i) }), # pause
-        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i) }), # wakeup
-        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i) }), # state change
-        superhashof({ workflow_state => "LOITERING", workflow_action => re(qr/do_something/i) }),
+        superhashof({ workflow_state => "INITIAL", workflow_action => re(qr/initialize/i), workflow_description => re(qr/^EXECUTE/) }),
+        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i), workflow_description => re(qr/^PAUSED/) }), # pause
+        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i), workflow_description => re(qr/^WAKEUP/) }), # wakeup
+        superhashof({ workflow_state => "BACKGROUNDING", workflow_action => re(qr/pause_before_fork/i), workflow_description => re(qr/^EXECUTE/) }), # state change
+        superhashof({ workflow_state => "LOITERING", workflow_action => re(qr/do_something/i), workflow_description => re(qr/^AUTORUN/) }),
     ] or diag explain $result;
 } "get_workflow_history()";
 

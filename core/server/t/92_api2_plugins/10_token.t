@@ -55,7 +55,7 @@ my $result;
 # get_ca_list
 #
 lives_and {
-    my $data = $api->get_ca_list();
+    my $data = $api->get_ca_list(check_online => 1);
 
     cmp_deeply $data, bag(
         {
@@ -82,7 +82,7 @@ lives_and {
             notbefore   => $as3->db->{notbefore},
             status      => "UPCOMING",
         },
-    );
+    ) or diag explain $data;
 } "get_ca_list - list signing CAs with correct status";
 
 lives_and {
@@ -209,7 +209,7 @@ lives_and {
 
 # "hide" private key that belongs to the cert - token should then not be usable anymore
 my $key_path = $oxitest->config_writer->get_private_key_path($as2->db->{pki_realm}, $as2->db_alias->{alias});
-rename $key_path, "${key_path}.hide" or BAIL_OUT("Could not rename private key file ${key_path}");
+rename $key_path, "${key_path}.hide" or die("Could not rename private key file ${key_path}");
 
 lives_and {
     my $data = $api->is_token_usable(
@@ -218,7 +218,7 @@ lives_and {
     isnt $data, 1;
 } "is_token_usable - using 'alias' with private key inaccessible";
 
-rename "${key_path}.hide", $key_path or BAIL_OUT("Could not rename private key file ${key_path}.hide");
+rename "${key_path}.hide", $key_path or die("Could not rename private key file ${key_path}.hide");
 
 # is_token_usable using "engine"
 lives_and {

@@ -10,6 +10,7 @@ use OpenXPKI::Debug;
 use Data::Dumper;
 use File::Temp;
 use MIME::Base64 qw(encode_base64);
+use Workflow::Exception qw(configuration_error);
 
 sub execute {
 
@@ -34,8 +35,40 @@ sub execute {
     # no template, no key, just export the plain certificate
     if (!$template && !defined $key_password) {
 
-        my $cert = CTX('api2')->get_cert( identifier => $cert_identifier, format => 'PEM' );
-        $context->param( $target_key  => $cert );
+        my $export_format = uc($self->param('export_format') || 'PEM');
+        my $data;
+        if ($export_format eq 'PEM') {
+            $data = CTX('api2')->get_cert( identifier => $cert_identifier, format => 'PEM' );
+
+        } elsif ($export_format eq 'DER') {
+            $data = CTX('api2')->get_cert( identifier => $cert_identifier, format => 'DER' );
+            $data = encode_base64($data,'') if ($encode);
+
+        } elsif ($export_format eq 'BUNDLE') {
+            my $chain = CTX('api2')->get_chain( start_with => $cert_identifier, format => 'PEM' );
+            $data = $chain->{certificates};
+            if ( $chain->{complete} && !$self->param('include_root_cert') ) {
+                pop @{$data};
+            }
+        } elsif ($export_format eq 'PKCS7') {
+            $data = CTX('api2')->get_chain(
+                start_with => $cert_identifier,
+                bundle => 1,
+                keeproot => $self->param('include_root_cert')
+            );
+        } elsif ($export_format eq 'PKCS7DER') {
+            $data = CTX('api2')->get_chain(
+                start_with => $cert_identifier,
+                bundle => 1,
+                format => 'DER',
+                keeproot => $self->param('include_root_cert')
+            );
+            $data = encode_base64($data,'') if ($encode);
+        } else {
+            configuration_error('Invalid export format ' . $export_format);
+        }
+
+        $context->param( $target_key  => $data );
 
     } elsif (defined $key_password) {
         my $privkey;
@@ -172,10 +205,44 @@ The cert to be exported.
 The PEM encoded private key, protected by the given key_password.
 Mandatory if the private key can not be found in the datapool.
 
+=item export_format, optional
+
+Only used in plain export mode (no template and no key export), defines
+the format of the certificate to be written into the target_key. The
+default is to export the PEM encoded certificate.
+
+=over
+
+=item PEM
+
+Exports the certificate as PEM block
+
+=item DER
+
+Exports the certificate in DER format as binary! Will obey the
+I<base64> flag.
+
+=item PKCS7
+
+Create a PKCS7 bundle including the issuer chain, will contain the root
+certificate if I<include_root_cert> is set.
+
+=item PKCS7DER
+
+Same as PKCS7 but the output is the raw binary DER encoding, will obey
+the I<base64> flag.
+
+=item BUNDLE
+
+Same as PKCS7 but the certificates are exported into the context as array
+of PEM encoded blocks. The entity certificate is the first item.
+
+=back
+
 =item template
 
 A template toolkit string or, in conjunction with I<template_dir>, the name of
-a template file to be used to render the output.
+a template file to be used to render the output. Will override I<export_format>.
 
 The parser is called with six parameters. Certificates are PEM encoded, keys
 might be in binary format, depending on the key_format parameter!
@@ -242,8 +309,8 @@ Parameter is ignored for any other key types.
 
 =item include_root_cert, optional
 
-Only valid with PKCS12 or JavaKeyStore format.
-If set to a true value, the root certificate will be included in the file.
+Only valid with PKCS12, JavaKeyStore or Bundle/PKCS7 format.
+If set to a true value, the root certificate will be included in the output.
 B<Warning>: Root certificates should be distributed and validated with a
 defined process and not as a "drive-by"! Enable this only if you are sure
 about the implications.
@@ -263,7 +330,7 @@ Note: If you export a key and use a persisted workflow, this will leave the
 =item base64, optional
 
 Boolean, if set the output is wrapped by a base64 encoding to avoid raw
-binary data in context. This is ineffective when a template is set, use
-the template definition instead.
+binary data in context. Only available with format DER or PKCS7DER.
+Ineffective when a template is set, use the template definition instead.
 
 =back

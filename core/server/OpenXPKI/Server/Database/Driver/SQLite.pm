@@ -45,15 +45,34 @@ sub sqlam_params {
     limit_offset => 'LimitOffset',    # see SQL::Abstract::Limit source code
 }
 
-################################################################################
-# required by OpenXPKI::Server::Database::Role::Driver
-#
-
 sub table_drop_query {
     my ($self, $dbi, $table) = @_;
     return OpenXPKI::Server::Database::Query->new(
         string => "DROP TABLE IF EXISTS $table",
     );
+}
+
+sub _get_x_from_date {
+    my ($part, $date) = @_;
+
+    my $date_map = {
+        year => '%Y',
+        month => '%m',
+        day => '%d',
+        hour => '%H',
+        minute => '%M',
+        second => '%S',
+    };
+    return sprintf "strftime('%s', %s)", $date_map->{lc($part)}, $date;
+}
+
+sub do_sql_replacements {
+    my ($self, $sql) = @_;
+
+    $sql =~ s/from_unixtime \s* \( \s* ( [^\)]+ ) \)/DATETIME($1, 'unixepoch')/gmsxi;
+    $sql =~ s/extract \s* \( \s* ( [^\)\s]+ ) \s+ from \s+ ( [^\(]* \( [^\)]* \) )* [^\)]* \)/_get_x_from_date($1,$2)/gemsxi;
+
+    return $sql;
 }
 
 ################################################################################

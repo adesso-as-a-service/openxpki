@@ -1,11 +1,3 @@
-## OpenXPKI::Server::Authentication.pm
-##
-## Written 2003 by Michael Bell
-## Rewritten 2005 and 2006 by Michael Bell for the OpenXPKI project
-## adapted to new Service::Default semantics 2007 by Alexander Klink
-## for the OpenXPKI project
-## (C) Copyright 2003-2007 by The OpenXPKI Project
-
 package OpenXPKI::Server::Authentication;
 
 use strict;
@@ -119,6 +111,11 @@ sub __load_pki_realm
         $self->__load_handler ( $handler );
     }
 
+    my @roles = CTX('config')->get_keys(['auth', 'roles']);
+    foreach my $role (@roles) {
+        $self->__load_tenant ( $role );
+    }
+
     ##! 64: "Realm auth config " . Dumper $self->{PKI_REALM}->{$realm}
 
     CTX('session')->data->pki_realm( $restore_realm ) if $restore_realm;
@@ -163,6 +160,59 @@ sub __load_handler
     return 1;
 }
 
+sub __load_tenant {
+
+    ##! 4: "start"
+    my $self  = shift;
+    my $role  = shift;
+
+    my $realm = CTX('session')->data->pki_realm;
+    my $config = CTX('config');
+
+    my $conf = $config->get_hash(['auth', 'roles', $role, 'tenant']);
+
+    return unless ($conf);
+
+    # always add the null handler if it does not exist
+    if (!$self->{PKI_REALM}->{$realm}->{TENANT}->{_default}) {
+        eval "use OpenXPKI::Server::AccessControl::Tenant::Null;1";
+        $self->{PKI_REALM}->{$realm}->{TENANT}->{_default} = OpenXPKI::Server::AccessControl::Tenant::Null->new();
+        CTX('log')->auth()->info('Loaded tenant null handler');
+    }
+
+    ##! 64: $conf
+    # type or class must be defined
+    my $class;
+    # no tenant config defined for role, return null handler
+    if ($conf->{class}) {
+        $class = $conf->{class};
+        delete $conf->{class};
+    } elsif ($conf->{type}) {
+        $class = 'OpenXPKI::Server::AccessControl::Tenant::'.$conf->{type};
+        delete $conf->{type};
+    } else {
+        OpenXPKI::Exception->throw(
+            message => 'Tenant handler has neither class nor type set',
+            params => { role => $role, param => $conf }
+        );
+    }
+    ##! 32: $class
+    eval "use $class;1";
+    if ($EVAL_ERROR) {
+        OpenXPKI::Exception->throw (
+            message => "Unable to load access control handler class $class",
+            params  => {ERRVAL => $EVAL_ERROR}
+        );
+    }
+
+    $self->{PKI_REALM}->{$realm}->{TENANT}->{$role} = $class->new( %{$conf} );
+
+    CTX('log')->auth()->info('Loaded tenant handler for role ' . $role);
+
+    return 1;
+
+}
+
 ########################################################################
 ##                          identify the user                         ##
 ########################################################################
@@ -184,7 +234,7 @@ sub list_authentication_stacks {
     return \%ret;
 }
 
-sub get_stack_info {
+sub __get_stack_info {
 
     ##! 1: "start"
 
@@ -243,15 +293,19 @@ sub get_stack_info {
         $auth_type = 'passwd';
     }
 
-    my %jwsign;
+    my $stack_reply = {
+        type => $auth_type,
+        params => ($auth_param //= {}),
+    };
+
     if (my $keyid = $self->{PKI_REALM}->{$realm}->{STACK}->{$stack}->{keyid}) {
-        $jwsign{SIGN} = { keyid => $keyid };
+        $stack_reply->{sign} = { keyid => $keyid };
     }
 
     ##! 8: "Auth Type $auth_type"
-    ##! 32: $auth_param
-    # TODO - clean this up and return some more abstract info
-    return (undef, undef, { SERVICE_MSG => 'GET_'.uc($auth_type).'_LOGIN', PARAMS => ($auth_param //= {}), %jwsign });
+    ##! 32: $stack_reply
+    return $stack_reply;
+
 }
 
 sub __legacy_login {
@@ -294,7 +348,6 @@ sub __legacy_login {
             role => $role,
             userinfo => $userinfo,
             handler => $handler,
-            is_valid => 1,
         );
     }
 
@@ -418,8 +471,12 @@ sub login_step {
             ##! 64: Dumper $auth_result
             $last_result = $auth_result;
             # abort processing if the login was valid
-            last HANDLER if ($auth_result->is_valid());
+            if ($auth_result->is_valid()) {
+                $handlerClass->register_login( $auth_result );
+                last HANDLER;
+            }
             CTX('log')->auth()->info('Got invalid auth result from handler ' . $handler);
+            CTX('log')->auth()->debug($auth_result->error_message());
         }
     }
 
@@ -427,7 +484,7 @@ sub login_step {
     # no result at all usually means we even did not try to login
     # fetch the required "challenges" from the STACK! We use the fast
     # path via the config layer - FIXME - check if we should cache this
-    return $self->get_stack_info($stack) unless ($last_result);
+    return $self->__get_stack_info($stack) unless ($last_result);
 
     # if we have a result but it is not valid we tried to log in but failed
     # we use the "old" exception pattern as we need to rework the error
@@ -441,18 +498,58 @@ sub login_step {
         );
     }
 
+    if ($self->has_tenant_handler( $last_result->role() )) {
+        if (!$last_result->has_tenants()) {
+            CTX('log')->auth()->error(sprintf('Login failed, no tenant information for user: %s, role: %s)', $last_result->username(), $last_result->role()));
+            OpenXPKI::Exception::Authentication->throw(
+                message => 'I18N_OPENXPKI_UI_AUTHENTICATION_FAILED_TENANT_REQUIRED',
+                authinfo => $last_result->authinfo(),
+                params => { username => $last_result->username(), role => $last_result->role() }
+            );
+        }
+        if (!defined $self->tenant_handler( $last_result->role() )->validate_tenants( $last_result->tenants() )) {
+            CTX('log')->auth()->error(sprintf('Login failed, tenant information not valid for handler: %s, role: %s)', $last_result->username(), $last_result->role()));
+            OpenXPKI::Exception::Authentication->throw(
+                message => 'I18N_OPENXPKI_UI_AUTHENTICATION_FAILED_TENANT_INVALID',
+                authinfo => $last_result->authinfo(),
+                params => { username => $last_result->username(), role => $last_result->role(), $last_result->tenants() }
+            );
+        }
+    }
+
     CTX('log')->auth()->info(sprintf("Login successful (user: %s, role: %s)",
         $last_result->userid, $last_result->role));
 
-    return (
-        $last_result->userid,
-        $last_result->role,
-        { SERVICE_MSG => 'SERVICE_READY' },
-        ($last_result->userinfo // {}),
-        ($last_result->authinfo // {})
-    );
+    return $last_result;
 
 };
+
+sub has_tenant_handler {
+
+    ##! 1: 'start'
+    my $self = shift;
+
+    my $role = shift;
+    my $realm = CTX('session')->data->pki_realm;
+    $role ||= (CTX('session')->data->role || 'Anonymous');
+
+    return defined $self->{PKI_REALM}->{$realm}->{TENANT}->{$role};
+
+}
+
+sub tenant_handler {
+
+    ##! 1: 'start'
+    my $self = shift;
+
+    my $role = shift;
+    $role ||= (CTX('session')->data->role || 'Anonymous');
+    ##! 8: 'role ' . $role
+    my $realm = CTX('session')->data->pki_realm;
+
+    # return the handler from the cache list by role or the null handler from _default
+    return $self->{PKI_REALM}->{$realm}->{TENANT}->{$role} // $self->{PKI_REALM}->{$realm}->{TENANT}->{_default};
+}
 
 1;
 __END__
@@ -492,10 +589,39 @@ Reply is the reply message that is to be sent to the user
 (i.e. a challenge, or the 'SERVICE_READY' message in case
 the authentication has been successful).
 
+=head2 has_tenant_handler
+
+Return true/false if the given role (default session role) has a tenant
+handler configured that needs to be used.
+
+=head2 tenant_handler
+
+Return the handler class that provides the filters and access
+restrictions for multi-tenant setups. Handlers are bound to a role,
+if you dont pass the role as parameter the value from the current
+session is used.
+
+Configuration for tenant handlers is done in I<auth.roles>:
+
+    RA Operator:
+        label: RA Operator
+        # will load OpenXPKI::Server::AccessControl::Tenant::Base
+        tenant:
+            type: Base
+
+    Local Registrar:
+        label: Local Staff
+        # will load OpenXPKI::Custom::TenantRules with "foo => bar"
+        # passed to the constructor
+        tenant:
+            class: OpenXPKI::Custom::TenantRules
+            foo: bar
+
 =head1 See Also
 
 OpenXPKI::Server::Authentication::Anonymous
-OpenXPKI::Server::Authentication::External
-OpenXPKI::Server::Authentication::LDAP
+OpenXPKI::Server::Authentication::ClientX509
+OpenXPKI::Server::Authentication::Connector
+OpenXPKI::Server::Authentication::NoAuth
+OpenXPKI::Server::Authentication::OneTimePassword
 OpenXPKI::Server::Authentication::Password
-OpenXPKI::Server::Authentication::X509

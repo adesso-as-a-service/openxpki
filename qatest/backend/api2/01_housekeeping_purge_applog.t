@@ -8,10 +8,12 @@ use FindBin qw( $Bin );
 
 # CPAN modules
 use Test::More;
+use Test::Deep;
 use Test::Exception;
 use Log::Log4perl;
 use Log::Log4perl::Appender;
 use Log::Log4perl::Layout::NoopLayout;
+use Log::Log4perl::Level;
 
 # Project modules
 use lib "$Bin/../../lib", "$Bin/../../../core/server/t/lib";
@@ -22,12 +24,14 @@ plan tests => 7;
 
 
 my $maxage = 60*60*24;  # 1 day
+my $loglevel = 'INFO';
+my $loglevel_int = Log::Log4perl::Level::to_priority($loglevel);
 
 #
 # Setup test context
 #
 my $oxitest = OpenXPKI::Test->new(
-    log_level => 'info',
+    log_level => $loglevel,
     enable_workflow_log => 1, # while testing we do not log to database by default
 );
 
@@ -84,7 +88,11 @@ my $result = $dbi->select_hashes(
         message => { -like => "%$msg" },
     }
 );
-is scalar @{$result}, 1, "1 log entry found via string search";
+
+cmp_deeply $result, superbagof(superhashof({
+    workflow_id => $wf_id,
+    priority => $loglevel_int,
+})), "log entry found via string search";
 
 # Insert test message #1 via database
 ok $dbi->insert_and_commit(
@@ -94,7 +102,7 @@ ok $dbi->insert_and_commit(
         logtimestamp        => time - $maxage + 5, # should be kept when calling 'purge'
         workflow_id         => $wf_id,
         category            => 'openxpki.application',
-        priority            => 'info',
+        priority            => $loglevel_int,
         message             => "Blah",
     },
 ), "insert old test message to be kept";
@@ -107,7 +115,7 @@ ok $dbi->insert_and_commit(
         logtimestamp        => time - $maxage - 5, # should be deleted when calling 'purge'
         workflow_id         => $wf_id,
         category            => 'openxpki.application',
-        priority            => 'info',
+        priority            => $loglevel_int,
         message             => "Blah",
     },
 ), "insert old test message to be purged";

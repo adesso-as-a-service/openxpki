@@ -96,6 +96,11 @@ sub __init_command_params : PRIVATE {
                           "INCLUDE_PADDING" => 0,
                           "BINARY" => 0,
                           "NOENGINE" => 0},
+    "decrypt_digest"  => { 'DATA'   => 1,
+                           'KEY' => 0,
+                           'PASSWD' => 0,
+                           'CERT' => 0
+                         },
     "get_pkcs8_keytype" => { 'DATA'   => 1,
                             'PASSWD' => 1,
                            },
@@ -124,11 +129,15 @@ sub __init_command_params : PRIVATE {
     "pkcs7_sign"      => {"PASSWD"  => 0,
                           "KEY"     => 0,
                           "CERT"    => 0,
-                          "CONTENT" => 1},
+                          "CONTENT" => 1,
+                          "OUTFORM" => ['__undef', 'DER','PEM'],},
     "pkcs7_verify"    => {"CHAIN"   => 0, # optional only when NO_VERIFY is set
                           "NO_CHAIN" => 0,
                           "CONTENT" => 0,
-                          "PKCS7"   => 1},
+                          "PKCS7"   => 1,
+                          "CRL"   => 0,
+                          "CRL_CHECK" => ["leaf","all"],
+                          },
 
     "pkcs7_get_payload" => {"PKCS7" => 1,
                             "NOSIGS" => 1,
@@ -153,6 +162,10 @@ sub __init_command_params : PRIVATE {
                           },
     "asn1_genconf"    => {"DATA" => 1 },
 
+    "sign_digest"     =>  {"DIGEST" => 1,
+                           "KEY" => 0,
+                           'PASSWD' => 0,
+                           "CERT" => 0 },
     };
 
     ## reassign the updated value to the command_params attribute

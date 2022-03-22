@@ -18,6 +18,9 @@ use Test::More;
 use Test::Exception;
 use Log::Log4perl;
 
+use FindBin qw( $Bin );
+require "$Bin/DatabaseTest.pm";
+
 #use OpenXPKI::Debug; $OpenXPKI::Debug::LEVEL{'OpenXPKI::Server::Database.*'} = 100;
 
 plan skip_all => "No MySQL database found / OXI_TEST_DB_MYSQL_NAME not set" unless $ENV{OXI_TEST_DB_MYSQL_NAME};
@@ -28,7 +31,7 @@ plan skip_all => "No MySQL database found / OXI_TEST_DB_MYSQL_NAME not set" unle
 sub log_contains {
     my ($regex) = @_;
     my $appender = Log::Log4perl->appender_by_name("Everything")
-        or BAIL_OUT("Could not access Log4perl appender");
+        or die("Could not access Log4perl appender");
     my $messages = $appender->string;
     $appender->string("");
     like $messages, $regex;
@@ -43,11 +46,8 @@ Log::Log4perl->init(\"
 my $log = Log::Log4perl->get_logger();
 
 my $db_params = {
-    type => "MySQLTest",
-    host => "127.0.0.1", # if not specified, the driver tries socket connection
-    name => $ENV{OXI_TEST_DB_MYSQL_NAME},
-    user => $ENV{OXI_TEST_DB_MYSQL_USER},
-    passwd => $ENV{OXI_TEST_DB_MYSQL_PASSWORD},
+    %{ DatabaseTest->new()->get_dbi_params('mariadb') },
+    type => 'MySQLTest',
 };
 
 use_ok "OpenXPKI::Server::Database";
@@ -102,4 +102,4 @@ bob_sees 1, "LED-Panel", "Bob sees new data";
 $db_bob->commit; # to be able to drop database
 $db_alice->run("DROP TABLE test");
 
-done_testing(6);
+done_testing();

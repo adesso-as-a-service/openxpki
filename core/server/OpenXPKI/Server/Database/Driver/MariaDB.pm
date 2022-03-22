@@ -65,9 +65,6 @@ sub sqlam_params {
     limit_offset => 'LimitOffset',    # see SQL::Abstract::Limit source code
 }
 
-################################################################################
-# required by OpenXPKI::Server::Database::Role::Driver
-#
 sub sequence_create_query {
     my ($self, $dbi, $seq) = @_;
 
@@ -90,6 +87,8 @@ sub table_drop_query {
         string => "DROP TABLE IF EXISTS $table",
     );
 }
+
+sub do_sql_replacements { shift; shift } # return input argument
 
 ################################################################################
 # required by OpenXPKI::Server::Database::Role::SequenceSupport

@@ -1,8 +1,10 @@
-FROM node:fermium-buster-slim
+FROM docker.io/library/node:fermium-buster-slim
 
+# Note: npm needs Git to fetch some modules directly from Github
 RUN apt-get update && \
     apt-get -y install \
         rsync \
+        git \
         && \
     apt-get clean
 
@@ -10,7 +12,7 @@ RUN mkdir /build && chmod 0777 /build
 
 # Specify command
 #   We do some copy magic to ensure we use node_modules/ from the container,
-#   not the one bind-mounted one from the host.
+#   not the one bind-mounted from the host.
 #   The output path for compiled assets is changed to /compiled, "outputpath"
 #   is used in package.json via "$npm_package_config_outputpath".
 RUN echo '#!/bin/bash \n\

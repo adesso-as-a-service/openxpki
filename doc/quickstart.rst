@@ -38,7 +38,7 @@ The debian package come with a sample configuration, for a production setup
 we recommend to remove the `/etc/openxpki` folder created by the package and
 replace it with a checkout of the `community` branch of the configuration
 repository available at https://github.com/openxpki/openxpki-config. Please
-also have a look at the [QUICKSTART.md document](https://github.com/openxpki/openxpki-config/blob/community/QUICKSTART.md)
+also have a look at the `QUICKSTART.md document <https://github.com/openxpki/openxpki-config/blob/community/QUICKSTART.md>`_
 which has some more detailed instructions how to setup the system.
 
 **Note**: The configuration is (usually) backward compatible but most releases
@@ -69,7 +69,9 @@ To avoid an "untrusted package" warning, you should add our package signing key 
 The https connection is protected by a Let's Encrypt certificate but if you want to validate the key on your own, the fingerprint is::
 
     gpg --print-md sha256 Release.key
-    Release.key: 9B156AD0 F0E6A6C7 86FABE7A D8363C4E 1611A2BE 2B251336 01D1CDB4 6C24BEF3
+    Release.key: 55D89776 006F632B E0196E3E D2495509 BAFDDC74 22FEAAD2 F055074E 0FE3A724
+
+You can also find the key on the github repository in `package/debian/Release.key`.
 
 Add the repository to your source list (buster)::
 
@@ -133,21 +135,6 @@ Example call when debian packages >= v3.8 are installed::
 If you do not use debian packages, you can get a copy from ``contrib/sql/`` in the
 config repository https://github.com/openxpki/openxpki-config.
 
-You should now be able to start the server::
-
-    $ openxpkictl start
-
-    Starting OpenXPKI...
-    OpenXPKI Server is running and accepting requests.
-    DONE.
-
-    In the process list, you should see two process running::
-
-    14302 ?        S      0:00 openxpki watchdog ( main )
-    14303 ?        S      0:00 openxpki server ( main )
-
-    If this is not the case, check */var/log/openxpki/stderr.log*.
-
 System Setup
 ------------
 
@@ -158,11 +145,17 @@ The debian package comes with a shell script ``sampleconfig.sh`` that does all t
 (look in /usr/share/doc/libopenxpki-perl/examples/). The script will create a two stage ca with
 a root ca certificate and below your issuing ca and certs for SCEP and the internal datasafe.
 
+It will also start the required services, you should be able to log into the system via the
+webbrowser using the default credentials (see section `Testdrive`_ below).
+
 This script provides a quickstart but should **never be used for production systems**
 (it has the fixed passphrase *root* for all keys ;) and no policy/crl, etc config ).
 
 Production Configuration
 ^^^^^^^^^^^^^^^^^^^^^^^^
+
+For a production setup we recommend to remove the `/etc/openxpki` folder that was installed
+by the package and use a checkout of the `openxpki-config repository at <https://github.com/openxpki/openxpki-config>`_.
 
 You need to create the following keys/certificates yourself if you *dont* use the sampleconfig script.
 
@@ -172,7 +165,7 @@ You need to create the following keys/certificates yourself if you *dont* use th
 
 OpenXPKI supports NIST and Brainpool ECC curves (as supported by openssl) for the CA certificates, as the Datavault
 certificate is used for data encryption it **MUST** use an RSA key! You should also remove the `democa` realm and
-create a realm with a proper name (see [reference/configuration/introduction.html#main-configuration]).
+create a realm with a proper name (see `<reference/configuration/introduction.html#main-configuration>`_).
 
 **Starting with release 3.6 the default config uses the database to store the issuing ca and SCEP tokens -
 if you upgrade from an older config version check the new settings in systems/crypto.yaml.**
@@ -202,7 +195,7 @@ If this is not the case, check */var/log/openxpki/stderr.log*.
 Import Root CA
 ##############
 
-The Root CA is outside the scope of OpenXPKI, we recommend to use (clca)[https://github.com/openxpki/clca].
+The Root CA is outside the scope of OpenXPKI, we recommend to use `clca <https://github.com/openxpki/clca>`_.
 
 As OpenXPKI needs to be able to build the full chain for any certificate,
 we need to import the Root CA(s) first::
@@ -219,7 +212,7 @@ self-signed certificate with this key with subject "/CN=DataVault". You
 can find a usable sample config file to create an **unencrypted** key
 in the contrib folder::
 
-    $ openssl req -new -keyout vault.key -out vault.crt -days 1100 \
+    $ openssl req -new -x509 -keyout vault.key -out vault.crt -days 1100 \
         -config /etc/openxpki/contrib/vault.openssl.cnf
 
 Now import the certificate and its key::
@@ -331,8 +324,14 @@ You should now be able to start the apache server::
 Navigate your browser to *https://yourhost/openxpki/*. If your browser asks you to present a certificate
 for authentication, skip it. You should now see the main authentication page.
 
-You can log in as user with any username/password combination, the operator login has two preconfigured
-operator accounts raop and raop2 with password openxpki.
+The sample configuration comes with a predefined handler for a local user database and also a set of
+tests accounts. If you start with the configuration repository, the password for all accounts is
+`openxpki`, if you start with the debian package the password is randomized during setup, you will see it
+on the console during install and can find it in clear text in `/etc/openxpki/config.d/realm.tpl/auth/handler.yaml`
+
+The usernames are `alice` and `bob` (users) and `rob`, `rose` and `raop` (operators). To setup your local
+user database have a look at the files in the auth directory and the
+`<reference/configuration/realm.html#authentication>`_
 
 If you only get the "Open Source Trustcenter" banner without a login prompt, check that fcgid is enabled
 as described above with (``a2enmod fcgid; service apache2 restart``). If you get an internal server error,
@@ -341,10 +340,10 @@ make sure you have the *en_US.utf8* locale installed (``locale -a | grep en_US``
 Testdrive
 ^^^^^^^^^
 
-#. Login as User (Username: bob, Password: <any>)
+#. Login as User (Username: bob, Password: <see above>)
 #. Go to "Request", select "Request new certificate"
 #. Complete the pages until you get to the status "PENDING" (gray box on the right)
-#. Logout and re-login as RA Operator (Username: raop, Password: openxpki )
+#. Logout and re-login as RA Operator (Username: raop, Password: <see above> )
 #. Select "Home / My tasks", there should be a table with one request pending
 #. Select your Request by clicking the line, change the request or use the "approve" button
 #. After some seconds, your first certificate is ready :)

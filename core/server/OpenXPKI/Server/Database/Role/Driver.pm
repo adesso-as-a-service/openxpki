@@ -46,11 +46,20 @@ requires 'next_id';
 # Returns OpenXPKI::Server::Database::Query: query to create a new sequence
 requires 'sequence_create_query';
 
+# Returns OpenXPKI::Server::Database::Query: query to drop a sequence
+requires 'sequence_drop_query';
+
+# Returns OpenXPKI::Server::Database::Query: query to drop a table
+requires 'table_drop_query';
+
 # Returns OpenXPKI::Server::Database::Query: MERGE query (="REPLACE" = "UPSERT" = UPDATE or INSERT)
 requires 'merge_query';
 
 # Returns OpenXPKI::Server::Database::Query: to count the rows of a given SELECT statement
 requires 'count_rows';
+
+# Returns a HashRef of qr() expressions and their replacement strings
+requires 'do_sql_replacements';
 
 1;
 

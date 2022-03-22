@@ -1,10 +1,14 @@
 package OpenXPKI::Client::UI::Workflow;
 use Moose;
 
+extends 'OpenXPKI::Client::UI::Result';
+
 # Core modules
 use DateTime;
 use POSIX;
 use Data::Dumper;
+use Cache::LRU;
+use Digest::SHA qw(sha1_hex);
 
 # CPAN modules
 use Log::Log4perl::MDC;
@@ -12,9 +16,18 @@ use Date::Parse;
 use YAML::Loader;
 use Try::Tiny;
 use MIME::Base64;
+use Crypt::JWT qw( encode_jwt );
+use Crypt::PRNG;
+
+# Project modules
 use OpenXPKI::DateTime;
 use OpenXPKI::Debug;
-use OpenXPKI::i18n qw( i18nTokenizer );
+use OpenXPKI::i18n qw( i18nTokenizer i18nGettext );
+
+
+# used to cache static patterns like the creator lookup
+my $template_cache = Cache::LRU->new( size => 256 );
+
 
 has __default_grid_head => (
     is => 'rw',
@@ -63,32 +76,18 @@ has __default_wfdetails => (
         },
         {
             label => 'I18N_OPENXPKI_UI_WORKFLOW_CREATOR_LABEL',
-            field => 'context.creator',
+            field => 'creator',
         },
         {
             label => 'I18N_OPENXPKI_UI_WORKFLOW_STATE_LABEL',
             template => "[% IF state == 'SUCCESS' %]<b>Success</b>[% ELSE %][% state %][% END %]",
-            type => "raw",
+            format => "raw",
         },
         {
             label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_LABEL',
             field => 'proc_state',
         },
     ] },
-);
-
-has __proc_states_for_search  => (
-    is => 'rw',
-    isa => 'ArrayRef',
-    lazy => 1,
-    default => sub { return [
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_MANUAL', value => 'manual' },
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_PAUSE', value => 'pause' },
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_RETRY_EXCEEDED', value => 'retry_exceeded' },
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_EXCEPTION', value => 'exception' },
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_FINISHED', value => 'finished' },
-        { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_ARCHIVED', value => 'archived' },
-    ]; }
 );
 
 has __validity_options => (
@@ -102,7 +101,51 @@ has __validity_options => (
     ];}
 );
 
-extends 'OpenXPKI::Client::UI::Result';
+has __proc_state_i18n => (
+    is => 'ro', isa => 'HashRef', lazy => 1, init_arg => undef,
+    default => sub { return {
+        # label = short label
+        #   - heading for workflow info popup (workflow search results)
+        #   - search dropdown
+        #   - technical info block on workflow page
+        #
+        # desc = description
+        #   - workflow info popup (workflow search results)
+        running => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_DESC',
+        },
+        manual => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_MANUAL_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_MANUAL_DESC',
+        },
+        finished => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_DESC',
+        },
+        pause => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_PAUSE_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_PAUSE_DESC',
+        },
+        exception => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_DESC',
+        },
+        retry_exceeded => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_RETRY_EXCEEDED_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_RETRY_EXCEEDED_DESC',
+        },
+        archived => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_ARCHIVED_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_ARCHIVED_DESC',
+        },
+        failed => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_FAILED_LABEL',
+            desc =>  'I18N_OPENXPKI_UI_WORKFLOW_INFO_FAILED_DESC',
+        },
+    } },
+);
+
 =head1 OpenXPKI::Client::UI::Workflow
 
 Generic UI handler class to render a workflow into gui elements.
@@ -139,7 +182,7 @@ sub init_index {
     my $args = shift;
 
     my $wf_info = $self->send_command_v2( 'get_workflow_base_info', {
-        type => $self->param('wf_type')
+        type => scalar $self->param('wf_type')
     });
 
     if (!$wf_info) {
@@ -169,7 +212,8 @@ sub init_start {
     my $args = shift;
 
     my $wf_info = $self->send_command_v2( 'create_workflow_instance', {
-       workflow => $self->param('wf_type'), params   => {}, ui_info => 1
+       workflow => scalar $self->param('wf_type'), params => {}, ui_info => 1,
+       $self->__tenant(),
     });
 
     if (!$wf_info) {
@@ -384,7 +428,7 @@ sub init_info {
         name => "error_code",
         value => $wf_info->{workflow}->{context}->{error_code},
     } if ($wf_info->{workflow}->{context}->{error_code}
-        && $wf_info->{workflow}->{proc_state} =~ m{(manual|finished)});
+        && $wf_info->{workflow}->{proc_state} =~ m{(manual|finished|failed)});
 
     # The workflow info contains info about all control actions that
     # can be done on the workflow -> render appropriate buttons.
@@ -435,24 +479,13 @@ sub init_info {
         isLarge => 1,
     });
 
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_MANUAL_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_PAUSE_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_RETRY_EXCEEDED_LABEL
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_RUNNING_DESC
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_MANUAL_DESC
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_FINISHED_DESC
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_PAUSE_DESC
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_EXCEPTION_DESC
-    #I18N_OPENXPKI_UI_WORKFLOW_INFO_RETRY_EXCEEDED_DESC
+    my $proc_state = $wf_info->{workflow}->{proc_state};
 
     $self->add_section({
         type => 'keyvalue',
         content => {
-            label => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_'.uc( $wf_info->{workflow}->{proc_state} ).'_LABEL',
-            description => 'I18N_OPENXPKI_UI_WORKFLOW_INFO_'.uc( $wf_info->{workflow}->{proc_state} ).'_DESC',
+            label => $self->__get_proc_state_label($proc_state),
+            description => $self->__get_proc_state_desc($proc_state),
             data => $fields,
             buttons => \@buttons_handle,
     }});
@@ -513,6 +546,13 @@ sub init_search {
     my @wfl_list = map { {'value' => $_, 'label' => $workflows->{$_}->{label}} } @wf_names ;
     @wfl_list = sort { lc($a->{'label'}) cmp lc($b->{'label'}) } @wfl_list;
 
+    my $proc_states = [
+        sort { $a->{label} cmp $b->{label} }
+        map { { label => i18nGettext($self->__get_proc_state_label($_)), value => $_} }
+        grep { $_ ne 'running' }
+        keys %{ $self->__proc_state_i18n }
+    ];
+
     my @fields = (
         { name => 'wf_type',
           label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_TYPE_LABEL',
@@ -524,15 +564,15 @@ sub init_search {
         },
         { name => 'wf_proc_state',
           label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_LABEL',
-
           type => 'select',
           is_optional => 1,
           prompt => '',
-          options => $self->__proc_states_for_search(),
+          options => $proc_states,
           value => $preset->{wf_proc_state}
         },
         { name => 'wf_state',
           label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_LABEL',
+          placeholder => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_PLACEHOLDER',
           type => 'text',
           is_optional => 1,
           prompt => '',
@@ -540,6 +580,7 @@ sub init_search {
         },
         { name => 'wf_creator',
           label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_LABEL',
+          placeholder => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_PLACEHOLDER',
           type => 'text',
           is_optional => 1,
           value => $preset->{wf_creator}
@@ -555,14 +596,20 @@ sub init_search {
 
     # Searchable attributes are read from the menu bootstrap
     my $attributes = $self->_session->param('wfsearch')->{default}->{attributes};
+    my @meta_description;
     if ($attributes && (ref $attributes eq 'ARRAY')) {
         my @attrib;
         foreach my $item (@{$attributes}) {
             push @attrib, { value => $item->{key}, label=> $item->{label} };
+            if ($item->{description}) {
+                push @meta_description, { label=> $item->{label}, value => $item->{description}, format => 'raw' };
+            }
         }
+        unshift @meta_description, { value => 'I18N_OPENXPKI_UI_WORKFLOW_METADATA_LABEL', format => 'head' } if (@meta_description);
         push @fields, {
             name => 'attributes',
-            label => 'Metadata',
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_METADATA_LABEL',
+            placeholder => 'I18N_OPENXPKI_UI_SEARCH_METADATA_PLACEHOLDER',
             'keys' => \@attrib,
             type => 'text',
             is_optional => 1,
@@ -594,6 +641,22 @@ sub init_search {
             submit_label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_SUBMIT_LABEL',
             fields => \@fields
 
+        }
+    });
+
+    $self->add_section({
+        type => 'keyvalue',
+        content => {
+            label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_FIELD_HINT_LIST',
+            description => '',
+            data => [
+              { label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_TYPE_LABEL', value => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_TYPE_HINT', format => 'raw' },
+              { label => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_LABEL', value => 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_HINT', format => 'raw' },
+              { label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_LABEL', value => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_STATE_HINT', format => 'raw' },
+              { label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_LABEL', value => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_CREATOR_HINT', format => 'raw' },
+              { label => 'I18N_OPENXPKI_UI_WORKFLOW_LAST_UPDATE_LABEL', value => 'I18N_OPENXPKI_UI_WORKFLOW_LAST_UPDATE_HINT', format => 'raw' },
+              @meta_description
+            ]
         }
     });
 
@@ -1211,8 +1274,10 @@ sub action_index {
 
     } elsif ($wf_args->{wf_type}) {
 
+
         $wf_info = $self->send_command_v2( 'create_workflow_instance', {
-            workflow => $wf_args->{wf_type}, params => \%wf_param, ui_info => 1
+            workflow => $wf_args->{wf_type}, params => \%wf_param, ui_info => 1,
+            $self->__tenant(),
         });
         if (!$wf_info) {
 
@@ -1336,6 +1401,11 @@ sub action_handle {
         $wf_info = $self->send_command_v2( 'resume_workflow', {
             id => $wf_args->{wf_id}, async => 1, wait => 1
         });
+    } elsif ('reset' eq $handle) {
+        $self->logger()->info(sprintf "Workflow %01d trigger reset", $wf_args->{wf_id} );
+        $wf_info = $self->send_command_v2( 'reset_workflow', {
+            id => $wf_args->{wf_id}
+        });
     } elsif ('archive' eq $handle) {
         $self->logger()->info(sprintf "Workflow %01d trigger archive", $wf_args->{wf_id} );
         $wf_info = $self->send_command_v2( 'archive_workflow', {
@@ -1452,49 +1522,48 @@ sub action_search {
     my $self = shift;
     my $args = shift;
 
-    my $query = { };
+    my $query = { $self->__tenant() };
     my $verbose = {};
     my $input;
 
-    if ($self->param('wf_type')) {
-        $query->{type} = $self->param('wf_type');
-        $input->{wf_type} = $self->param('wf_type');
-        $verbose->{wf_type} = $self->param('wf_type');
-
+    if (my $type = $self->param('wf_type')) {
+        $query->{type} = $type;
+        $input->{wf_type} = $type;
+        $verbose->{wf_type} = $type;
     }
 
-    if ($self->param('wf_state')) {
-        $query->{state} = $self->param('wf_state');
-        $input->{wf_state} = $self->param('wf_state');
-        $verbose->{wf_state} = $self->param('wf_state');
+    if (my $state = $self->param('wf_state')) {
+        $query->{state} = [ split /\s/, $state ];
+        $input->{wf_state} = $state;
+        $verbose->{wf_state} = $state;
     }
 
-    if ($self->param('wf_proc_state')) {
-        $query->{proc_state} = $self->param('wf_proc_state');
-        $input->{wf_proc_state} = $self->param('wf_proc_state');
-        $verbose->{wf_proc_state} = 'I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_' . uc($self->param('wf_proc_state'));
+    if (my $proc_state = $self->param('wf_proc_state')) {
+        $query->{proc_state} = $proc_state;
+        $input->{wf_proc_state} = $proc_state;
+        $verbose->{wf_proc_state} = $self->__get_proc_state_label($proc_state);
     }
 
-    if ($self->param('last_update_before')) {
-        $query->{last_update_before} = $self->param('last_update_before');
-        $input->{last_update} = { key => 'last_update_before', value => $self->param('last_update_before') };
-        $verbose->{last_update_before} = DateTime->from_epoch( epoch => $self->param('last_update_before') )->iso8601();
+    if (my $last_update_before = $self->param('last_update_before')) {
+        $query->{last_update_before} = $last_update_before;
+        $input->{last_update} = { key => 'last_update_before', value => $last_update_before };
+        $verbose->{last_update_before} = DateTime->from_epoch( epoch => $last_update_before )->iso8601();
     }
 
-    if ($self->param('last_update_after')) {
-        $query->{last_update_after} = $self->param('last_update_after');
-        $input->{last_update} = { key => 'last_update_after', value => $self->param('last_update_after') };
-        $verbose->{last_update_after} = DateTime->from_epoch( epoch => $self->param('last_update_after') )->iso8601();
+    if (my $last_update_after = $self->param('last_update_after')) {
+        $query->{last_update_after} = $last_update_after;
+        $input->{last_update} = { key => 'last_update_after', value => $last_update_after };
+        $verbose->{last_update_after} = DateTime->from_epoch( epoch => $last_update_after )->iso8601();
     }
 
     # Read the query pattern for extra attributes from the session
     my $spec = $self->_session->param('wfsearch')->{default};
     my $attr = $self->__build_attribute_subquery( $spec->{attributes} );
 
-    if ($self->param('wf_creator')) {
-        $input->{wf_creator} = $self->param('wf_creator');
-        $attr->{'creator'} = ~~$self->param('wf_creator');
-        $verbose->{wf_creator} = $self->param('wf_creator');
+    if (my $wf_creator = $self->param('wf_creator')) {
+        $input->{wf_creator} = $wf_creator;
+        $attr->{'creator'} = { -like => $self->transate_sql_wildcards($wf_creator) };
+        $verbose->{wf_creator} = $wf_creator;
     }
 
     if ($attr) {
@@ -1519,7 +1588,9 @@ sub action_search {
 
     # No results founds
     if (!$result_count) {
-        $self->set_status('I18N_OPENXPKI_UI_SEARCH_HAS_NO_MATCHES','error');
+        # if $result_count is undefined there was an error with the query
+        # status was set to the error message from the run_command sub
+        $self->set_status('I18N_OPENXPKI_UI_SEARCH_HAS_NO_MATCHES','error') if (defined $result_count);
         return $self->init_search({ preset => $input });
     }
 
@@ -1591,13 +1662,13 @@ sub action_bulk {
     $self->logger()->trace('Doing bulk with arguments: '. Dumper $wf_args) if $self->logger->is_trace;
 
     # wf_token is also used as name of the form field
-    my @serials = $self->param($wf_token);
+    my @serials = $self->multi_param($wf_token);
 
     my @success; # list of wf_info results
     my $errors; # hash with wf_id => error
 
     my ($command, %params);
-    if ($wf_args->{wf_action} =~ m{(fail|wakeup|resume)}) {
+    if ($wf_args->{wf_action} =~ m{(fail|wakeup|resume|reset)}) {
         $command = $wf_args->{wf_action}.'_workflow';
         %params = %{$wf_args->{params}} if ($wf_args->{params});
     } elsif ($wf_args->{wf_action} =~ m{\w+_\w+}) {
@@ -1646,7 +1717,7 @@ sub action_bulk {
         $self->set_status('I18N_OPENXPKI_UI_WORKFLOW_BULK_RESULT_HAS_FAILED_ITEMS_STATUS', 'error');
 
         my @failed_id = keys %{$errors};
-        my $failed_result = $self->send_command_v2( 'search_workflow_instances', { id => \@failed_id } );
+        my $failed_result = $self->send_command_v2( 'search_workflow_instances', { id => \@failed_id, $self->__tenant() } );
 
         my @result_failed = $self->__render_result_list( $failed_result, $self->__default_grid_row );
 
@@ -1816,7 +1887,7 @@ sub __render_from_workflow {
 
     my $wf_proc_state = $wf_info->{workflow}->{proc_state} || 'init';
 
-    # add buttons for manipulative handles (wakeup, fail, resume)
+    # add buttons for manipulative handles (wakeup, fail, reset, resume)
     # to be added to the default button list
 
     my @handles;
@@ -1841,6 +1912,21 @@ sub __render_from_workflow {
                 label => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESUME_BUTTON',
                 action => 'workflow!handle!wf_token!'.$token->{value},
                 format => 'exceptional'
+            };
+        }
+
+        if (grep /\A reset \Z/x, @handles) {
+            my $token = $self->__register_wf_token( $wf_info, { wf_handle => 'reset' } );
+            push @buttons_handle, {
+                label => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_BUTTON',
+                action => 'workflow!handle!wf_token!'.$token->{value},
+                format => 'reset',
+                confirm => {
+                    label => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_LABEL',
+                    description => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_TEXT',
+                    confirm_label => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_CONFIRM_BUTTON',
+                    cancel_label => 'I18N_OPENXPKI_UI_WORKFLOW_FORCE_RESET_DIALOG_CANCEL_BUTTON',
+                }
             };
         }
 
@@ -1875,64 +1961,32 @@ sub __render_from_workflow {
         }
     }
 
-    # we set the breadcrumb only if the workflow has a title set
-    # fallback to label if title is not DEFINED is done in the API
-    # setting title to the empty string will suppress breadcrumbs
-    my @breadcrumb;
-    if ($wf_info->{workflow}->{title}) {
-        if ($wf_info->{workflow}->{id}) {
-            push @breadcrumb, {
-                className => 'workflow-type' ,
-                label => sprintf("%s (#%01d)", $wf_info->{workflow}->{title}, $wf_info->{workflow}->{id})
-            };
-        } elsif ($wf_info->{workflow}->{state} eq 'INITIAL') {
-            push @breadcrumb, {
-                className => 'workflow-type',
-                label => sprintf("%s", $wf_info->{workflow}->{title})
-            };
-        }
-    }
 
-    # helper sub to render the pages description text from state/action using a template
-    my $templated_description = sub {
-        my $page_def = shift;
-        my $description;
-        if ($page_def->{template}) {
-            my $user = $self->_client->session()->param('user');
-            $description = $self->send_command_v2( 'render_template', {
-                template => $page_def->{template}, params => {
-                    context => $wf_info->{workflow}->{context},
-                    user => { name => $user->{name},  role => $user->{role} },
-                },
-            });
-        }
-        return  $description || $page_def->{description} || '';
-    };
 
-    # check if the workflow is in a "non-regular" state
-    if (grep /$wf_proc_state/, ('pause','retry_exceeded','exception', 'running')) {
+    # show buttons to proceed with workflow if it's in "non-regular" state
+    my %irregular = (
+        running => 'I18N_OPENXPKI_UI_WORKFLOW_STATE_RUNNING_DESC',
+        pause => 'I18N_OPENXPKI_UI_WORKFLOW_STATE_PAUSE_DESC',
+        exception => 'I18N_OPENXPKI_UI_WORKFLOW_STATE_EXCEPTION_DESC',
+        retry_exceeded => 'I18N_OPENXPKI_UI_WORKFLOW_STATE_RETRY_EXCEEDED_DESC',
+    );
+    if ($irregular{$wf_proc_state}) {
 
         # same page head for all proc states
         my $wf_action = $wf_info->{workflow}->{context}->{wf_current_action};
         my $wf_action_info = $wf_info->{activity}->{ $wf_action };
 
-        if (@breadcrumb && $wf_info->{state}->{label}) {
-            push @breadcrumb, { className => 'workflow-state', label => $wf_info->{state}->{label} };
-        }
+        my $label = $self->__get_proc_state_label($wf_proc_state); # reuse labels from init_info popup
+        my $desc = $irregular{$wf_proc_state};
 
         $self->_page({
-            # reuse labels from init_info popup
-            label => sprintf("I18N_OPENXPKI_UI_WORKFLOW_INFO_%s_LABEL", uc($wf_proc_state)),
-            breadcrumb => \@breadcrumb,
+            label => $label,
+            breadcrumb => $self->__get_breadcrumb($wf_info, $wf_info->{state}->{label}),
             shortlabel => $wf_info->{workflow}->{id},
-            description => sprintf("I18N_OPENXPKI_UI_WORKFLOW_STATE_%s_DESC", uc($wf_proc_state)),
+            description => $desc,
             className => 'workflow workflow-proc-state workflow-proc-'.$wf_proc_state,
             ($wf_info->{workflow}->{id} ? (canonical_uri => 'workflow!load!wf_id!'.$wf_info->{workflow}->{id}) : ()),
         });
-        #I18N_OPENXPKI_UI_WORKFLOW_STATE_RUNNING_DESC
-        #I18N_OPENXPKI_UI_WORKFLOW_STATE_PAUSE_DESC
-        #I18N_OPENXPKI_UI_WORKFLOW_STATE_EXCEPTION_DESC
-        #I18N_OPENXPKI_UI_WORKFLOW_STATE_RETRY_EXCEEDED_DESC
 
         my @buttons;
         my @fields;
@@ -2068,118 +2122,22 @@ sub __render_from_workflow {
     # if there is one activity selected (or only one present), we render it now
     } elsif ($wf_action) {
 
-        my $wf_action_info = $wf_info->{activity}->{$wf_action};
-        # if we fallback to the state label we dont want it in the 1
-        my $label = $wf_action_info->{label};
-        if ($label ne $wf_action) {
-            if (@breadcrumb && $wf_info->{state}->{label}) {
-                push @breadcrumb, { className => 'workflow-state', label => $wf_info->{state}->{label} };
-            }
+        $self->__render_workflow_action_head($wf_info, $wf_action);
+
+        # delegation based on activity    ;
+        if (my $uihandle = $wf_info->{activity}->{$wf_action}->{uihandle}) {
+            $self->__delegate_call($uihandle, $args, $wf_action);
         } else {
-            $label = $wf_info->{state}->{label};
+            $self->__render_workflow_action_body($wf_info, $wf_action, $view);
         }
 
-        $self->_page({
-            label => $label,
-            breadcrumb => \@breadcrumb,
-            shortlabel => $wf_info->{workflow}->{id},
-            description =>  $templated_description->($wf_action_info),
-            className => 'workflow workflow-action ' . ($wf_action_info->{uiclass} || ''),
-            canonical_uri => sprintf('workflow!load!wf_id!%01d!wf_action!%s', $wf_info->{workflow}->{id}, $wf_action),
-        });
-
-        # delegation based on activity
-        if ($wf_action_info->{uihandle}) {
-            return $self->__delegate_call($wf_action_info->{uihandle}, $args, $wf_action);
-        }
-
-        $self->logger()->trace('activity info ' . Dumper $wf_action_info ) if $self->logger->is_trace;
-
-        # we allow prefill of the form if the workflow is started
-        my $do_prefill = $wf_info->{workflow}->{state} eq 'INITIAL';
-
-        my $context = $wf_info->{workflow}->{context};
-        my @fields;
-        my @fielddesc;
-
-        foreach my $field (@{$wf_action_info->{field}}) {
-
-            my $name = $field->{name};
-            next if ($name =~ m{ \A workflow_id }x);
-            next if ($name =~ m{ \A wf_ }x);
-            next if ($field->{type} && $field->{type} eq "server");
-
-            my $val = $self->param($name);
-            if ($do_prefill && defined $val) {
-                # XSS prevention - very rude, but if you need to pass something
-                # more sophisticated use the wf_token technique
-                $val =~ s/[^A-Za-z0-9_=,-\. ]//;
-            } elsif (defined $context->{$name}) {
-                $val = $context->{$name};
-            } else {
-                $val = undef;
-            }
-
-            my $item = $self->__render_input_field( $field, $val );
-            next unless ($item);
-
-            push @fields, $item;
-            # if the field has a description text, push it to the @fielddesc list
-            my $descr = $field->{description};
-            if ($descr && $descr !~ /^\s*$/ && $field->{type} ne 'hidden') {
-                push @fielddesc, { label => $item->{label}, value => $descr, format => 'raw' };
-            }
-
-        }
-
-        # Render the context values if there are no fields
-        if (!scalar @fields) {
-            $self->add_section({
-                type => 'keyvalue',
-                content => {
-                    label => '',
-                    description => '',
-                    data => $self->__render_fields( $wf_info, $view ),
-                    buttons => $self->__get_form_buttons( $wf_info ),
-            }});
-
-        } else {
-
-            # record the workflow info in the session
-            push @fields, $self->__register_wf_token( $wf_info, {
-                wf_action => $wf_action,
-                wf_fields => \@fields,
-            });
-
-            $self->add_section({
-                type => 'form',
-                action => 'workflow',
-                content => {
-                    #label => $wf_action_info->{label},
-                    #description => $wf_action_info->{description},
-                    submit_label => $wf_action_info->{button} || 'I18N_OPENXPKI_UI_WORKFLOW_SUBMIT_BUTTON',
-                    fields => \@fields,
-                    buttons => $self->__get_form_buttons( $wf_info ),
-                }
-            });
-
-            if (@fielddesc) {
-                $self->add_section({
-                    type => 'keyvalue',
-                    content => {
-                        label => 'I18N_OPENXPKI_UI_WORKFLOW_FIELD_HINT_LIST',
-                        description => '',
-                        data => \@fielddesc
-                }});
-            }
-        }
     } else {
 
         $self->_page({
             label => $wf_info->{state}->{label} || $wf_info->{workflow}->{title} || $wf_info->{workflow}->{label},
-            breadcrumb => \@breadcrumb,
+            breadcrumb => $self->__get_breadcrumb($wf_info),
             shortlabel => $wf_info->{workflow}->{id},
-            description =>  $templated_description->($wf_info->{state}),
+            description => $self->__get_templated_description($wf_info, $wf_info->{state}),
             className => 'workflow workflow-page ' . ($wf_info->{state}->{uiclass} || ''),
             ($wf_info->{workflow}->{id} ? (canonical_uri => 'workflow!load!wf_id!'.$wf_info->{workflow}->{id}) : ()),
         });
@@ -2211,6 +2169,10 @@ sub __render_from_workflow {
         # Archived workflow
         } elsif ('archived' eq $wf_proc_state) {
             $self->set_status('I18N_OPENXPKI_UI_WORKFLOW_STATE_ARCHIVED', 'info');
+
+        # Forcibly failed workflow
+        } elsif ('failed' eq $wf_proc_state) {
+            $self->set_status('I18N_OPENXPKI_UI_WORKFLOW_STATE_FAILED', 'error');
         }
 
         my $fields = $self->__render_fields( $wf_info, $view );
@@ -2567,6 +2529,12 @@ sub __get_next_auto_action {
 Render the UI code for a input field from the server sided definition.
 Does translation of labels and mangles values for multi-valued componentes.
 
+This method might dynamically create additional "helper" fields on-the-fly
+(usually of type I<hidden>) and may thus return a list with several field
+definitions.
+
+The first returned item is always the one corresponding to the workflow field.
+
 =cut
 
 sub __render_input_field {
@@ -2574,6 +2542,9 @@ sub __render_input_field {
     my $self = shift;
     my $field = shift;
     my $value = shift;
+
+    die "__render_input_field() must be called in list context: it may return more than one field definition\n"
+      unless wantarray;
 
     my $name = $field->{name};
     next if ($name =~ m{ \A workflow_id }x);
@@ -2584,41 +2555,67 @@ sub __render_input_field {
     # fields to be filled only by server sided workflows
     return if ($type eq "server");
 
+    # common attributes for all field types
     my $item = {
         name => $name,
         label => $field->{label} || $name,
         type => $type
     };
-
     $item->{placeholder} = $field->{placeholder} if ($field->{placeholder});
     $item->{tooltip} = $field->{tooltip} if ($field->{tooltip});
+    $item->{clonable} = 1 if $field->{clonable};
+    $item->{is_optional} = 1 unless $field->{required};
 
-    if ($field->{option}) {
+    # includes dynamically generated additional fields
+    my @all_items = ($item);
+
+    # type 'select' - fill in options
+    if ($type eq 'select' and $field->{option}) {
         $item->{options} = $field->{option};
     }
 
-    if ($field->{clonable}) {
-        $item->{clonable} = 1;
+    # type 'cert_identifier'
+    if ($type eq 'cert_identifier') {
+        # special handling of preset value
+        if ($value) {
+            $item->{type} = 'static';
+        }
+        else {
+            $item->{type} = 'text';
+            $item->{autocomplete_query} = {
+                action => "certificate!autocomplete",
+                params => {
+                    cert_identifier => $item->{name},
+                },
+            };
+        }
     }
 
-    if (!$field->{required}) {
-        $item->{is_optional} = 1;
+    # type 'uploadarea' - transform into 'textarea'
+    if ($type eq 'uploadarea') {
+        $item->{type} = 'textarea';
+        $item->{allow_upload} = 1;
     }
 
-    # special handling of preset cert_identifier fields
-    if ($type eq 'cert_identifier' && $value) {
-        $item->{type} = 'static';
+    # option 'autocomplete'
+    if ($field->{autocomplete}) {
+        my ($ac_query_params, $enc_field) = $self->make_autocomplete_query($field);
+        # "autocomplete_query" to distinguish it from the wf config param
+        $item->{autocomplete_query} = {
+            action => $field->{autocomplete}->{action},
+            params => $ac_query_params,
+        };
+        # additional field definition
+        push @all_items, $enc_field;
     }
 
     if (defined $value) {
         # clonables need array as value
         if ($item->{clonable}) {
-            if (ref $value) {
+            if (ref $value eq 'ARRAY') {
                 $item->{value} = $value;
-            } elsif(OpenXPKI::Serialization::Simple::is_serialized($value)) {
-                my $val = $self->serializer()->deserialize($value);
-                # The UI crashes on empty lists
-                $item->{value} = $val if (scalar @{$val} && defined $val->[0]);
+            } elsif (OpenXPKI::Serialization::Simple::is_serialized($value)) {
+                $item->{value} = $self->serializer()->deserialize($value);
             } elsif ($value) {
                 $item->{value} = [ $value ];
             }
@@ -2636,8 +2633,40 @@ sub __render_input_field {
         $item->{verbose} = $self->send_command_v2( 'render_template', { template => $field->{template}, params => $item } );
     }
 
-    return $item;
+    # type 'encrypted'
+    for (@all_items) {
+        $_->{value} = $self->_encrypt_jwt($_->{value}) if $_->{type} eq 'encrypted';
+    }
 
+    return @all_items;
+
+}
+
+# encrypt given data
+sub _encrypt_jwt {
+    my ($self, $value) = @_;
+
+    die "Only values of type HashRef are supported for encrypted input fields\n"
+      unless ref $value eq 'HASH';
+
+    my $key = $self->_session->param('jwt_encryption_key');
+    if (not $key) {
+        $key = Crypt::PRNG::random_bytes(32);
+        $self->_session->param('jwt_encryption_key', $key);
+    }
+
+    my $token = encode_jwt(
+        payload => $value,
+        enc => 'A256CBC-HS512',
+        alg => 'PBES2-HS512+A256KW', # uses "HMAC-SHA512" as the PRF and "AES256-WRAP" for the encryption scheme
+        key => $key, # can be any length for PBES2-HS512+A256KW
+        extra_headers => {
+            p2c => 8000, # PBES2 iteration count
+            p2s => 32,   # PBES2 salt length
+        },
+    );
+
+    return $token
 }
 
 =head2 __delegate_call
@@ -2717,7 +2746,8 @@ sub __render_result_list {
             $field = 'workflow_id' if ($field eq 'workflow_serial');
 
             # we need to load the wf info
-            if (!$wf_info && ($col->{template} || $col->{source} eq 'context')) {
+            my $colsrc = $col->{source} || '';
+            if (!$wf_info && ($col->{template} || $colsrc eq 'context')) {
                 $wf_info = $self->send_command_v2( 'get_workflow_info',  {
                     id => $wf_item->{'workflow_id'},
                     with_attributes => 1,
@@ -2736,32 +2766,28 @@ sub __render_result_list {
                 };
                 push @line, $self->send_command_v2( 'render_template', { template => $col->{template}, params => $ttp } );
 
-            } elsif ($col->{source} eq 'workflow') {
+            } elsif ($colsrc eq 'workflow') {
 
                 # Special handling of the state field
                 if ($field eq "workflow_state") {
                     my $state = $wf_item->{'workflow_state'};
                     my $proc_state = $wf_item->{'workflow_proc_state'};
-                    if ($proc_state eq 'exception') {
-                        $state .= " ( I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_EXCEPTION )";
 
-                    } elsif ($proc_state eq 'pause') {
-                        $state .= " ( I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_PAUSE )";
-
-                    } elsif ($proc_state eq 'retry_exceeded') {
-                        $state .= " ( I18N_OPENXPKI_UI_WORKFLOW_PROC_STATE_RETRY_EXCEEDED )";
-
-                    }
+                    if (grep /\A $proc_state \Z/x, qw( exception pause retry_exceeded failed )) {
+                        $state .= sprintf(" (%s)", $self->__get_proc_state_label($proc_state));
+                    };
                     push @line, $state;
                 } else {
                     push @line, $wf_item->{ $field };
 
                 }
 
-            } elsif ($col->{source} eq 'context') {
+            } elsif ($colsrc eq 'context') {
                 push @line, $context->{ $col->{field} };
-            } elsif ($col->{source} eq 'attribute') {
+            } elsif ($colsrc eq 'attribute') {
                 push @line, $wf_item->{ $col->{field} }
+            } elsif ($col->{field} eq 'creator') {
+                push @line, $self->__render_creator_tooltip($wf_item->{creator}, $col);
             } else {
                 # hu ?
             }
@@ -2803,8 +2829,31 @@ sub __render_list_spec {
     for (my $ii = 0; $ii < scalar @{$cols}; $ii++) {
 
         # we must create a copy as we change the hash in the session info otherwise
-        my %col = %{$cols->[$ii]};
+        my %col = %{ $cols->[$ii] };
+        my $field = $col{field} // ''; # prevent "Use of uninitialized value $col{"field"} in string eq"
         my $head = { sTitle => $col{label} };
+
+        if ($field eq 'creator') {
+            $attrib{'creator'} = 1;
+            $col{format} = 'tooltip';
+
+        } elsif ($field =~ m{\A (attribute)\.(\S+) }xi) {
+            $col{source} = $1;
+            $col{field} = $2;
+            $attrib{$2} = 1;
+
+        } elsif ($field =~ m{\A (context)\.(\S+) }xi) {
+            # we use this later to avoid the pattern match
+            $col{source} = $1;
+            $col{field} = $2;
+
+        } elsif (!$col{template}) {
+            $col{source} = 'workflow';
+            $col{field} = uc($col{field})
+
+        }
+        push @column, \%col;
+
         if ($col{sortkey}) {
             $head->{sortkey} = $col{sortkey};
         }
@@ -2812,25 +2861,6 @@ sub __render_list_spec {
             $head->{format} = $col{format};
         }
         push @header, $head;
-
-        if ($col{template}) {
-
-        } elsif ($col{field} =~ m{\A (attribute)\.(\S+) }xi) {
-            $col{source} = $1;
-            $col{field} = $2;
-            $attrib{$2} = 1;
-
-        } elsif ($col{field} =~ m{\A (context)\.(\S+) }xi) {
-            # we use this later to avoid the pattern match
-            $col{source} = $1;
-            $col{field} = $2;
-
-        } else {
-            $col{source} = 'workflow';
-            $col{field} = uc($col{field})
-
-        }
-        push @column, \%col;
     }
 
     push @header, { sTitle => 'serial', bVisible => 0 };
@@ -2894,8 +2924,13 @@ sub __render_fields {
             format =>  $field->{format} || ''
         };
 
+
+        if ($field->{uiclass}) {
+            $item->{className} = $field->{uiclass};
+        }
+
         if ($item->{format} eq 'spacer') {
-            push @fields, { format => 'head', className => 'spacer' };
+            push @fields, { format => 'head', className => $item->{className}||'spacer' };
             next FIELD;
         }
 
@@ -3131,7 +3166,8 @@ sub __render_fields {
                 }
             } else {
                 # if nothing is found, transform raw values to a deflist
-                @val = map { { key => $_, label => $_, value => $item->{value}->{$_}} } sort keys %{$item->{value}};
+                my $kv = $item->{value} || {};
+                @val = map { { key => $_, label => $_, value => $kv->{$_}} } sort keys %{$kv};
 
             }
 
@@ -3284,14 +3320,6 @@ sub __render_fields {
                 }
             }
 
-        } elsif ($item->{format} eq 'head') {
-            # head can either show a value from context or a fixed label
-            if ($item->{value} eq '') {
-                $item->{value} = $item->{label};
-            }
-            $item->{empty} = $field->{ifempty} || '';
-            $item->{className} //= 'spacer';
-
         } elsif ($field_type eq 'select' && !$field->{template} && $field->{option} && ref $field->{option} eq 'ARRAY') {
             foreach my $option (@{$field->{option}}) {
                 next unless (defined $option->{value});
@@ -3348,32 +3376,15 @@ sub __render_fields {
             }
 
         } elsif ($field->{yaml_template}) {
-            # We prepend a node to the template because
-            # 1. YAML parser chokes on arrays without parent node
-            # 2. the template renderer strips whitespaces off the very beginning which would destroy things
-            my $yaml = "OXI_PLACEHOLDER:\n" . $field->{yaml_template};
             ##! 64: 'Rendering value: ' . $item->{value}
             $self->logger->debug('Template value: ' . Dumper $item );
-            my $out = $self->send_command_v2('render_template', {
-                template => $yaml,
+            my $structure = $self->send_command_v2('render_yaml_template', {
+                template => $field->{yaml_template},
                 params => { value => $item->{value} },
             });
-            $self->logger->debug('Rendered YAML template: ' . $out);
+            $self->logger->debug('Rendered YAML template: ' . Dumper $structure);
             ##! 64: 'Rendered YAML template: ' . $out
-            if ($out) {
-                my $doc;
-                try {
-                    $doc = YAML::Loader->new->load($out);
-                }
-                catch {
-                    OpenXPKI::Exception->throw (
-                        message => "Error parsing YAML in 'yaml_template'",
-                        params => { field => $key, error => $_, yaml => $out }
-                    );
-                };
-                my $structure = $doc->{OXI_PLACEHOLDER};
-                $self->logger->debug('Parsed Perl structure: ' . Dumper($structure));
-                ##! 64: 'Parsed Perl structure: ' . Dumper($structure)
+            if (defined $structure) {
                 $item->{value} = $structure;
             } else {
                 $item->{value} = undef; # prevent pushing emtpy lists
@@ -3430,6 +3441,7 @@ sub __render_workflow_info {
                grep { ($_->{field}//'') =~              / attribute\. /msx } @$wfdetails_config
             or grep { ($_->{template}//'') =~           / attribute\. /msx } @$wfdetails_config
             or grep { (($_->{link}//{})->{page}//'') =~ / attribute\. /msx } @$wfdetails_config
+            or grep { ($_->{field}//'') =~              / \Acreator /msx } @$wfdetails_config
         )
     ) {
         $wfdetails_info = $self->send_command_v2( 'get_workflow_info',  {
@@ -3441,30 +3453,38 @@ sub __render_workflow_info {
         $wfdetails_info = $wf_info->{workflow};
     }
 
-    # translate $wfdetails_info->{context}->{creator} to $wfdetails_info_flat->{"context.creator"}
-    my $wfdetails_info_flat = { %{ $wfdetails_info } }; # make a copy
-    for my $subname (qw(context attribute)) {
-        my $subhash;
-        next unless $subhash = $wfdetails_info_flat->{ $subname };
-        for my $key ( keys %$subhash ) {
-            $wfdetails_info_flat->{"$subname.$key"} = $subhash->{ $key };
-        }
-        delete $wfdetails_info_flat->{ $subname };
-    }
-
     # assemble infos
     my @data;
     for my $cfg (@$wfdetails_config) {
         my $value;
 
-        if ($cfg->{template}) {
+        my $field = $cfg->{field} // '';
+        if ($field eq 'creator') {
+            # we enforce tooltip, if you need something else use a template on attribute.creator
+            if ($wfdetails_info->{attribute}->{creator} =~ m{certid:([\w-]+)}) {
+                $cfg->{format} = 'link';
+                # for a link the tooltip is on the top level and the value is a
+                # scalar so we need to remap this
+                $value = $self->__render_creator_tooltip($wfdetails_info->{attribute}->{creator}, $cfg);
+                $value->{label} = $value->{value};
+                $value->{page} = 'certificate!detail!identifier!'.$1;
+            } else {
+                $cfg->{format} = 'tooltip';
+                $value = $self->__render_creator_tooltip($wfdetails_info->{attribute}->{creator}, $cfg);
+            }
+        } elsif ($cfg->{template}) {
             $value = $self->send_command_v2( render_template => {
                 template => $cfg->{template},
                 params => $wfdetails_info,
             });
-        }
-        elsif ($cfg->{field}) {
-            $value = $wfdetails_info_flat->{ $cfg->{field} } // '-';
+        } elsif ($field =~ m{\A attribute\.(\S+) }xi) {
+            $value = $wfdetails_info->{attribute}->{$1} // '-';
+        } elsif ($field =~ m{\A context\.(\S+) }xi) {
+            $value = $wfdetails_info->{context}->{$1} // '-';
+        } elsif ($field eq 'proc_state') {
+            $value = $self->__get_proc_state_label($wfdetails_info->{$field});
+        } elsif ($field) {
+            $value = $wfdetails_info->{$field} // '-';
         }
 
         # if it's a link: render URL template ("page")
@@ -3491,6 +3511,89 @@ sub __render_workflow_info {
 
 }
 
+=head2 __render_creator_tooltip
+
+Expects the userid of a creator and the field definition.
+
+If the field has I<yaml_template> set, the template is parsed with the
+value of the creator given as key I<creator> in the parameter hash. If
+the resulting data structure is a hash and has a non-empty key I<value>,
+it is used as value for the field.
+
+If the field has I<template> set, the result of this template is used as
+tooltip for the field, the literal value given as I<creator> is used as
+the visible value. If the namespace of the item is I<certid>, the value
+will be created as link pointing to the certificate details popup.
+
+If neither one is set, the C<creator()> method from the C<Metadata>
+Plugin is used as default renderer.
+
+In case the template does not provide a usable value, the tooltip will
+show an error message, depending on weather the creator string has a
+namespace tag or not.
+
+=cut
+
+sub __render_creator_tooltip {
+
+    my $self = shift;
+    my $creator = shift;
+    my $field = shift;
+
+    my $cacheid;
+    my $value = { value => $creator };
+    if (!$field->{nocache}) {
+        # Enable caching of the creator information
+        # The key is made from the creator name and the template string
+        # and bound to the user session to avoid information leakage in
+        # case the template binds to the users role/permissions
+        $cacheid = Digest::SHA->new()
+            ->add($self->_session->id())
+            ->add($field->{yaml_template} // $field->{template} // '')
+            ->add($creator//'')->hexdigest;
+
+        $self->logger()->trace('creator tooltip cache id ' .  $cacheid);
+        my $value = $template_cache->get($cacheid);
+        return $value if($value);
+
+    }
+
+    # the field comes with a YAML template = render the field definiton from it
+    if ($field->{yaml_template}) {
+        $self->logger()->debug('render creator tooltip from yaml template');
+        my $val = $self->send_command_v2( render_yaml_template => {
+            template => $field->{yaml_template},
+            params => { creator => $creator },
+        });
+        $value = $val if (ref $val eq 'HASH' && $val->{value});
+
+    # use template (or default template) to set username
+    } else {
+        $self->logger()->debug('render creator name from template');
+        my $username = $self->send_command_v2( render_template => {
+            template => $field->{template} || '[% USE Metadata; Metadata.creator(creator) %]',
+            params => { creator => $creator },
+        });
+        if ($username) {
+            $value->{tooltip} = (($username ne $creator) ? $username : '');
+        }
+    }
+
+    # creator has no namespace so there was nothing to resolve
+    if (!defined $value->{tooltip} && $creator !~ m{\A\w+:}) {
+        $value->{tooltip} = 'I18N_OPENXPKI_UI_WORKFLOW_CREATOR_NO_NAMESPACE';
+    }
+
+    # still no result
+    $value->{tooltip} //= 'I18N_OPENXPKI_UI_WORKFLOW_CREATOR_UNABLE_TO_RESOLVE';
+
+    $self->logger()->trace(Dumper { cacheid => $cacheid, value => $value} );
+
+    $template_cache->set($cacheid => $value) if($cacheid);
+    return $value;
+
+}
+
 =head2 __render_task_list
 
 Expects a hash that defines a workflow query and output rules for a
@@ -3505,6 +3608,8 @@ sub __render_task_list {
 
     my $query = $item->{query};
     my $limit = 25;
+
+    $query = { $self->__tenant(), %$query } unless($query->{tenant});
 
     if ($query->{limit}) {
         $limit = $query->{limit};
@@ -3546,7 +3651,7 @@ sub __render_task_list {
 
     $self->logger()->trace( "columns : " . Dumper $column) if $self->logger->is_trace;
 
-    my $search_result = $self->send_command_v2( 'search_workflow_instances', { (limit => $limit), %$query } );
+    my $search_result = $self->send_command_v2( 'search_workflow_instances', { limit => $limit, %$query } );
 
     # empty message
     my $empty = $item->{ifempty} || 'I18N_OPENXPKI_UI_TASK_LIST_EMPTY_LABEL';
@@ -3619,16 +3724,200 @@ sub __check_for_validation_error {
         my $validator_msg = $reply->{'ERROR'}->{LABEL};
         my $field_errors = $reply->{'ERROR'}->{ERRORS};
         if (ref $field_errors eq 'ARRAY') {
-            $self->logger()->error("Input validation error on fields ".
+            $self->logger()->info('Input validation error on fields '.
                 join(",", map { ref $_ ? $_->{name} : $_ } @{$field_errors}));
         } else {
-            $self->logger()->error("Input validation error");
+            $self->logger()->info('Input validation error');
         }
         $self->_status({ level => 'error', message => $validator_msg, field_errors => $field_errors });
         $self->logger()->trace('validation details' . Dumper $field_errors ) if $self->logger->is_trace;
         return $field_errors;
     }
     return;
+}
+
+sub __get_proc_state_label {
+    my ($self, $proc_state) = @_;
+    return $proc_state ? $self->__proc_state_i18n->{$proc_state}->{label} : '-';
+}
+
+sub __get_proc_state_desc {
+    my ($self, $proc_state) = @_;
+    return $proc_state ? $self->__proc_state_i18n->{$proc_state}->{desc} : '-';
+}
+
+# methods extracted from __render_workflow_info
+# this should be moved to a seperate file/class
+sub __get_breadcrumb {
+
+    my $self = shift;
+    my $wf_info = shift;
+    my $state_label = shift;
+    # we set the breadcrumb only if the workflow has a title set
+    # fallback to label if title is not DEFINED is done in the API
+    # setting title to the empty string will suppress breadcrumbs
+    my @breadcrumb;
+    if ($wf_info->{workflow}->{title}) {
+        if ($wf_info->{workflow}->{id}) {
+            push @breadcrumb, {
+                className => 'workflow-type' ,
+                label => sprintf("%s (#%01d)", $wf_info->{workflow}->{title}, $wf_info->{workflow}->{id})
+            };
+        } elsif ($wf_info->{workflow}->{state} eq 'INITIAL') {
+            push @breadcrumb, {
+                className => 'workflow-type',
+                label => sprintf("%s", $wf_info->{workflow}->{title})
+            };
+        }
+    }
+
+    if (@breadcrumb && $state_label) {
+        push @breadcrumb, { className => 'workflow-state', label => $state_label };
+    }
+
+    return \@breadcrumb;
+
+}
+
+  # helper sub to render the pages description text from state/action using a template
+sub __get_templated_description {
+
+    my $self = shift;
+    my $wf_info = shift;
+    my $page_def = shift;
+    my $description;
+    if ($page_def->{template}) {
+        my $user = $self->_client->session()->param('user');
+        $description = $self->send_command_v2( 'render_template', {
+            template => $page_def->{template}, params => {
+                context => $wf_info->{workflow}->{context},
+                user => { name => $user->{name},  role => $user->{role} },
+            },
+        });
+    }
+    return  $description || $page_def->{description} || '';
+}
+
+sub __render_workflow_action_head {
+
+    my $self = shift;
+    my $wf_info = shift;
+    my $wf_action = shift;
+
+    my $wf_action_info = $wf_info->{activity}->{$wf_action};
+    # if we fallback to the state label we dont want it in the 1
+    my $label = $wf_action_info->{label};
+    my $breadcrumb;
+    if ($label ne $wf_action) {
+        $breadcrumb = $self->__get_breadcrumb($wf_info, $wf_info->{state}->{label}),
+    } else {
+        $label = $wf_info->{state}->{label};
+        $breadcrumb  = $self->__get_breadcrumb($wf_info);
+    }
+
+    $self->_page({
+        label => $label,
+        breadcrumb => $breadcrumb,
+        shortlabel => $wf_info->{workflow}->{id},
+        description => $self->__get_templated_description($wf_info, $wf_action_info),
+        className => 'workflow workflow-action ' . ($wf_action_info->{uiclass} || ''),
+        canonical_uri => sprintf('workflow!load!wf_id!%01d!wf_action!%s', $wf_info->{workflow}->{id}, $wf_action),
+    });
+
+}
+
+sub __render_workflow_action_body {
+
+    my $self = shift;
+    my $wf_info = shift;
+    my $wf_action = shift;
+    my $view = shift;
+
+    my $wf_action_info = $wf_info->{activity}->{$wf_action};
+
+    $self->logger()->trace('activity info ' . Dumper $wf_action_info ) if $self->logger->is_trace;
+
+    # we allow prefill of the form if the workflow is started
+    my $do_prefill = $wf_info->{workflow}->{state} eq 'INITIAL';
+
+    my $context = $wf_info->{workflow}->{context};
+    my @fields;
+    my @additional_fields;
+    my @fielddesc;
+
+    foreach my $field (@{$wf_action_info->{field}}) {
+
+        my $name = $field->{name};
+        next if ($name =~ m{ \A workflow_id }x);
+        next if ($name =~ m{ \A wf_ }x);
+        next if ($field->{type} && $field->{type} eq "server");
+
+        my $val = $self->param($name);
+        if ($do_prefill && defined $val) {
+            # XSS prevention - very rude, but if you need to pass something
+            # more sophisticated use the wf_token technique
+            $val =~ s/[^A-Za-z0-9_=,-\. ]//;
+        } elsif (defined $context->{$name}) {
+            $val = $context->{$name};
+        } else {
+            $val = undef;
+        }
+
+        my ($item, @more_items) = $self->__render_input_field( $field, $val );
+        next unless ($item);
+
+        push @fields, $item;
+        push @additional_fields, @more_items;
+
+        # if the field has a description text, push it to the @fielddesc list
+        my $descr = $field->{description};
+        if ($descr && $descr !~ /^\s*$/ && $field->{type} ne 'hidden') {
+            push @fielddesc, { label => $item->{label}, value => $descr, format => 'raw' };
+        }
+
+    }
+
+    # Render the context values if there are no fields
+    if (!scalar @fields) {
+        $self->add_section({
+            type => 'keyvalue',
+            content => {
+                label => '',
+                description => '',
+                data => $self->__render_fields( $wf_info, $view ),
+                buttons => $self->__get_form_buttons( $wf_info ),
+        }});
+
+    } else {
+
+        # record the workflow info in the session
+        push @fields, $self->__register_wf_token( $wf_info, {
+            wf_action => $wf_action,
+            wf_fields => \@fields,
+        });
+
+        $self->add_section({
+            type => 'form',
+            action => 'workflow',
+            content => {
+                #label => $wf_action_info->{label},
+                #description => $wf_action_info->{description},
+                submit_label => $wf_action_info->{button} || 'I18N_OPENXPKI_UI_WORKFLOW_SUBMIT_BUTTON',
+                fields => [ @fields, @additional_fields ],
+                buttons => $self->__get_form_buttons( $wf_info ),
+            }
+        });
+
+        if (@fielddesc) {
+            $self->add_section({
+                type => 'keyvalue',
+                content => {
+                    label => 'I18N_OPENXPKI_UI_WORKFLOW_FIELD_HINT_LIST',
+                    description => '',
+                    data => \@fielddesc
+            }});
+        }
+    }
 }
 
 =head1 example workflow config
@@ -3688,4 +3977,6 @@ the form submission so you either need to properly setup the environment to
 use the default action (see action_index) or set the wf_handler to a custom
 method for parsing the form data.
 
-1;
+=cut
+
+__PACKAGE__->meta->make_immutable;

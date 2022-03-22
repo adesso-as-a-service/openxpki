@@ -10,7 +10,6 @@
 use CGI 4.08;
 use CGI::Fast;
 use CGI::Session;
-use CGI::Carp qw (fatalsToBrowser);
 use JSON;
 use English;
 use strict;
@@ -20,7 +19,7 @@ use Config::Std;
 use OpenXPKI::Log4perl;
 use Log::Log4perl::MDC;
 use MIME::Base64 qw( encode_base64 decode_base64 );
-
+use Digest::SHA;
 use Crypt::CBC;
 use OpenXPKI::i18n qw( i18nGettext i18nTokenizer set_language set_locale_prefix);
 use OpenXPKI::Client;
@@ -38,14 +37,14 @@ eval {
     # do NOT call config here as webui does not
     # use the URI based  endpoint logic yet
     $conf = $config->default();
-    $log->debug(Dumper $conf);# if ($log->is_trace());
+    $log->trace(Dumper $conf) if ($log->is_trace());
 };
 
-if ($EVAL_ERROR) {
+if (my $err = $EVAL_ERROR) {
     my $cgi = CGI::Fast->new();
     print $cgi->header( -type => 'application/json' );
     print $json->encode( { status => { 'level' => 'error', 'message' => i18nGettext('I18N_OPENXPKI_UI_APPLICATION_ERROR') } });
-    die $EVAL_ERROR;
+    die $err;
 }
 
 if (!$conf->{global}->{socket}) {
@@ -120,6 +119,32 @@ sub __handle_error {
     return;
 }
 
+sub __get_cookie_cipher {
+
+    my $key = $conf->{session}->{cookey} || '';
+    # a list of ENV variables, added to the cookie passphrase
+    # binds the cookie encyption to the system environment
+    # Even if the Cryrp::CBC module will run a hash on the passphrase
+    # we directly use sha256 here to preprocess the input data one by one
+    # to keep the memory footprint as small as possible
+    if ($conf->{session}->{fingerprint}) {
+        $log->trace('Use fingerprint for cookie encryption: ' . $conf->{session}->{fingerprint});
+        my $sha = Digest::SHA->new('sha256');
+        $sha->add($key) if ($key);
+        map { $sha->add($ENV{$_}) if ($ENV{$_}); } split /\W+/, $conf->{session}->{fingerprint};
+        $key = $sha->digest;
+        $log->trace(sprintf('Cookie encryption key: %*vx', '', $key)) if ($log->trace);
+    }
+    return unless ($key);
+    my $cipher = Crypt::CBC->new(
+        -key => $key,
+        -pbkdf => 'opensslv2',
+        -cipher => 'Crypt::OpenSSL::AES',
+    );
+    return $cipher;
+
+}
+
 =head2 encrypt_cookie
 
 The key is read from the config, the cookie value is expected as argument.
@@ -130,12 +155,11 @@ Returns the encrypted value, if no key is set, returns the plain input value.
 sub encrypt_cookie {
 
     my $value = shift;
-    my $key = $conf->{session}->{cookey};
-    return $value unless ($key && $value);
-    my $cipher = Crypt::CBC->new(
-        -key => $key,
-        -cipher => 'Crypt::OpenSSL::AES',
-    );
+    return $value unless ($value);
+
+    my $cipher = __get_cookie_cipher();
+    return $value unless ($cipher);
+
     return encode_base64($cipher->encrypt($value));
 
 }
@@ -149,21 +173,19 @@ Reverse to encrypt_cookie
 sub decrypt_cookie {
 
     my $value = shift;
-    my $key = $conf->{session}->{cookey};
-    return $value unless ($key && $value);
+
+    return unless($value);
+
+    my $cipher = __get_cookie_cipher();
+    return $value unless ($cipher);
     my $plain;
     eval {
-        my $cipher = Crypt::CBC->new(
-            -key => $key,
-            -cipher => 'Crypt::OpenSSL::AES',
-        );
         $plain = $cipher->decrypt(decode_base64($value));
     };
     if (!$plain) {
         $log->error("Unable to decrypt cookie ($EVAL_ERROR)");
     }
     return $plain;
-
 }
 
 while (my $cgi = CGI::Fast->new()) {
@@ -176,8 +198,6 @@ while (my $cgi = CGI::Fast->new()) {
     my $sess_id = $cgi->cookie('oxisess-webui') || undef;
 
     $sess_id = decrypt_cookie($sess_id);
-
-    my $session_front;
 
     Log::Log4perl::MDC->remove();
     Log::Log4perl::MDC->put('sid', $sess_id ? substr($sess_id,0,4) : undef);
@@ -197,12 +217,10 @@ while (my $cgi = CGI::Fast->new()) {
        next;
     }
 
-    # this creates a standard CGI::Session object if OXI session is not used
-    if (!$session_front) {
-        my $driver_args = $conf->{session_driver} ? $conf->{session_driver} : { Directory => '/tmp' };
-        $session_front = new CGI::Session($conf->{session}->{driver}, $sess_id, $driver_args );
-        Log::Log4perl::MDC->put('sid', substr($session_front->id,0,4));
-    }
+
+    my $driver_args = $conf->{session_driver} ? $conf->{session_driver} : { Directory => '/tmp' };
+    my $session_front = new CGI::Session($conf->{session}->{driver}, $sess_id, $driver_args );
+    Log::Log4perl::MDC->put('sid', substr($session_front->id,0,4));
 
     if (defined $conf->{session}->{timeout}) {
         $session_front->expire( $conf->{session}->{timeout} );
@@ -267,7 +285,7 @@ while (my $cgi = CGI::Fast->new()) {
     push @header, ('-cookie', $cgi->cookie( $cookie ));
     push @header, ('-type','application/json; charset=UTF-8');
 
-    $log->trace('Init UI using backend ' . Dumper $backend_client);
+    $log->trace('Init UI using backend ' . ref $backend_client);
 
     my $result;
     eval {
@@ -286,16 +304,16 @@ while (my $cgi = CGI::Fast->new()) {
             %pkey,
         });
 
-        my $req = OpenXPKI::Client::UI::Request->new( cgi => $cgi, logger => $log );
-        $log->trace( Dumper $req ) if ($log->is_trace());
+        my $req = OpenXPKI::Client::UI::Request->new( cgi => $cgi, logger => $log, session => $session_front );
+        $log->trace(ref($req).' - '.Dumper({ map { $_ => $req->{$_} } qw( method cache cgi ) }) ) if ($log->is_trace());
         $result = $client->handle_request( $req );
-        $log->debug('request handled');
-        $log->trace( Dumper $result ) if ($log->is_trace());
+        $log->debug('Request handled');
+        $log->trace(ref($result).' - '.Dumper({ map { $_ => $result->{$_} } qw( type _page redirect extra _result ) }) ) if $log->is_trace();
     };
 
     if (!$result || ref $result !~ /OpenXPKI::Client::UI/) {
         __handle_error($cgi, $EVAL_ERROR);
-        $log->trace('result was ' . Dumper $result) if ($log->is_trace());
+        $log->trace('Result: ' . Dumper $result) if $log->is_trace();
     }
 
     # write session changes to backend

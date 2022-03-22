@@ -145,6 +145,7 @@ B<before> you use C<OpenXPKI::Test>:
 
 # Core modules
 use Data::Dumper;
+use File::Path qw( remove_tree );
 use File::Temp qw( tempdir );
 use Module::Load qw( autoload );
 
@@ -173,6 +174,7 @@ use OpenXPKI::Server::Log;
 use OpenXPKI::Server::Session;
 use OpenXPKI::Test::ConfigWriter;
 use OpenXPKI::Test::CertHelper::Database;
+use OpenXPKI::Test::Log4perlCallerFilter;
 
 Moose::Exporter->setup_import_methods(
     as_is     => [ \&OpenXPKI::Server::Context::CTX ],
@@ -393,8 +395,15 @@ has testenv_root => (
     is => 'rw',
     isa => 'Str',
     lazy => 1,
-    default => sub { scalar(tempdir( CLEANUP => 1 )) },
+    default => sub { scalar(tempdir( CLEANUP => 0 )) }, # "CLEANUP => 1" would interfere with forked processes (Watchdog)
+    # set flag if attribute was set via constructor
+    initializer => sub {
+        my ($self, $value, $callback, $attr) = @_;
+        $self->_custom_testenv_root(1);
+        $callback->($value);
+    },
 );
+has _custom_testenv_root => ( is => 'rw', isa => 'Bool', lazy => 1, default => 0 );
 
 =item * I<log_level> (optional) - L<Log::Log4Perl> log level for screen output.
 This is only relevant if C<$ENV{TEST_VERBOSE}> is set, i.e. user calls C<prove -v ...>.
@@ -405,6 +414,19 @@ has log_level => (
     is => 'rw',
     isa => 'Str',
     default => "WARN",
+);
+
+=item * I<log_class> (optional) - A regex: only show log messages originating
+from Perl packages matching this value.
+
+E.g. C<log_class =E<gt> qr/^OpenXPKI::Client::UI/> to show messages from all
+packages below this namespace. Default: qr/^/ (= all packages)
+
+=cut
+has log_class => (
+    is => 'rw',
+    isa => 'Regexp',
+    default => sub { qr/^/ },
 );
 
 =item * I<enable_workflow_log> (optional) - if set to 1 workflow related log
@@ -525,7 +547,7 @@ has conf_database       => ( is => 'rw', isa => 'HashRef', lazy => 1, builder =>
 # password for all openxpki users
 has password            => ( is => 'rw', isa => 'Str', lazy => 1, default => "openxpki" );
 has password_hash       => ( is => 'rw', isa => 'Str', lazy => 1, default => sub { my $self = shift; $self->_get_password_hash($self->password) } );
-has auth_stack          => ( is => 'ro', isa => 'Str', lazy => 1, default => "Testing" );
+has testenv_root_pid    => ( is => 'rw', isa => 'Str', init_arg => undef);
 
 around BUILDARGS => sub {
     my $orig  = shift;
@@ -560,6 +582,7 @@ sub BUILD {
     my $self = shift;
 
     $ENV{OXI_TESTENV_ROOT} = $self->testenv_root;
+    $self->testenv_root_pid($$);
 
     $self->init_logging;
     $self->init_base_config;
@@ -573,6 +596,22 @@ sub BUILD {
     # child code after $self->$orig()
     #
     $self->init_session_and_context;
+}
+
+sub DEMOLISH {
+    my $self = shift;
+    return unless $self->testenv_root_pid == $$;
+    if ($self->enable_file_log) {
+        diag "==========";
+        diag "Log file was enabled: " . $self->log_path;
+        diag "Temporary directory will NOT be removed!";
+        diag "==========";
+    }
+    else {
+        # using "tempdir(CLEANUP => 1)" in the attribute builder would
+        # interfere with forked processes (Watchdog)
+        remove_tree($self->testenv_root) unless $self->_custom_testenv_root;
+    }
 }
 
 sub _build_log4perl {
@@ -602,6 +641,8 @@ sub _log4perl_screen {
 
     my $threshold_screen = $ENV{TEST_VERBOSE} ? uc($self->log_level) : 'OFF';
     my $log_path = $self->log_path;
+    my $log_class_re = $self->log_class; # will get stringified below
+
     return qq(
         log4perl.rootLogger                     = INFO, Screen, File
         log4perl.category.openxpki.auth         = TRACE
@@ -613,9 +654,13 @@ sub _log4perl_screen {
         log4perl.category.connector             = WARN
         log4perl.category.Workflow              = OFF
 
+        log4perl.filter.OxiTestFilter           = OpenXPKI::Test::Log4perlCallerFilter
+        log4perl.filter.OxiTestFilter.class_re  = $log_class_re
+
         log4perl.appender.Screen                = Log::Log4perl::Appender::Screen
         log4perl.appender.Screen.layout         = Log::Log4perl::Layout::PatternLayout
-        log4perl.appender.Screen.layout.ConversionPattern = # %d %m [pid=%P|%i]%n
+        log4perl.appender.Screen.layout.ConversionPattern = # >> %m [%C]%n
+        log4perl.appender.Screen.Filter         = OxiTestFilter
         log4perl.appender.Screen.Threshold      = $threshold_screen
 
         # "File" is disabled by default
@@ -743,6 +788,23 @@ sub init_base_config {
         "system.database" => $self->conf_database,
         "system.server.session" => $self->conf_session,
         "system.server.log4perl" => $self->path_log4perl_conf,
+
+        # Add basic test realm.
+        # Without any realm we cannot set a user via CTX('authentication')
+        "system.realms.test" => {
+            label => "TestRealm",
+            baseurl => "http://127.0.0.1/test/",
+        },
+        "realm.test.auth" => $self->auth_config,
+        "realm.test.workflow" => {
+            def => {}, # node is required by OpenXPKI
+            persister => {
+                # fallback default persister
+                OpenXPKI => {
+                    class => "OpenXPKI::Server::Workflow::Persister::DBI",
+                },
+            },
+        },
     );
 }
 
@@ -756,17 +818,6 @@ sub init_user_config {
     my ($self) = @_;
 
     note "[OpenXPKI::Test->init_user_config]";
-
-    # Add basic test realm.
-    # Without any realm we cannot set a user via CTX('authentication')
-    $self->add_conf(
-        "system.realms.test" => {
-            label => "TestRealm",
-            baseurl => "http://127.0.0.1/test/",
-        },
-        "realm.test.auth" => $self->auth_config,
-        "realm.test.workflow.def" => {},
-    );
 
     # Add user supplied config (via constructor argument "add_config")
     for (sort keys %{ $self->user_config }) { # sorting should help adding config items deeper in the tree after those at the top
@@ -933,23 +984,25 @@ sub set_user {
 
     $self->session->data->pki_realm($realm);
 
-    my ($realuser, $role, $reply) = OpenXPKI::Server::Context::CTX('authentication')->login_step({
-        STACK   => $self->auth_stack,
+    my $reply = OpenXPKI::Server::Context::CTX('authentication')->login_step({
+        STACK   => 'OxiTestAuthStack',
         MESSAGE => {
             PARAMS => { LOGIN => $user, PASSWD => $self->password },
         },
     });
+;
+    die "Could not set user to '$user' " unless(ref $reply eq 'OpenXPKI::Server::Authentication::Handle');
 
-    die "Could not set user to '$user': ".Dumper($reply) unless $realuser && $role;
-
-    $self->session->data->user($realuser);
+    my $userid = $reply->userid;
+    my $role = $reply->role;
+    $self->session->data->user($userid);
     $self->session->data->role($role);
     $self->session->is_valid(1);
 
-    Log::Log4perl::MDC->put('user', $realuser);
+    Log::Log4perl::MDC->put('user', $userid);
     Log::Log4perl::MDC->put('role', $role);
 
-    note "  session set to realm '$realm', user '$user', role '$role'";
+    note " session set to realm '$realm', user '$userid', role '$role' ";
 }
 
 =head2 api2_command
@@ -1069,43 +1122,44 @@ sub _build_dbi {
 sub _build_db_conf {
     my ($self) = @_;
 
-    my $conf;
-    $conf = $self->_db_config_from_production unless $self->force_test_db;
-    $conf ||= $self->_db_config_from_env;
-    die "Could not read database config from /etc/openxpki or env variables" unless $conf;
-    return $conf;
+    if ($ENV{OXI_TEST_DB_CONFIG_PATH} and not $self->force_test_db) {
+        return $self->_db_config_from_production($ENV{OXI_TEST_DB_CONFIG_PATH});
+    }
+    elsif ($ENV{OXI_TEST_DB_MYSQL_NAME}) {
+        return $self->_db_config_from_env;
+    }
+    else {
+        die "Please set either OXI_TEST_DB_CONFIG_PATH or OXI_TEST_DB_MYSQL_* environment variables";
+    }
 }
 
 sub _db_config_from_production {
-    my ($self) = @_;
+    my ($self, $config_dir) = @_;
 
-    return unless (-d "/etc/openxpki/config.d" and -r "/etc/openxpki/config.d");
+    die "Could not read database config from $config_dir"
+      unless (-d $config_dir and -r $config_dir);
 
     # make sure OpenXPKI::Config::Backend reads from the given LOCATION
     my $old_env = $ENV{OPENXPKI_CONF_PATH}; delete $ENV{OPENXPKI_CONF_PATH};
-    my $config = OpenXPKI::Config::Backend->new(LOCATION => "/etc/openxpki/config.d");
+
+    my $config = OpenXPKI::Config->new(config_dir => $config_dir);
+
+    # read config - we use get() instead of get_hash() to support config links like "passwd@:"
+    my $path = 'system.database.main';
+    my %conf = map { $_ => ($config->get("$path.$_")//undef) } (qw(type name host port user passwd));
+
+    # set environment variables
+    my $env_path = 'system.database.main.environment';
+    $ENV{$_} = $config->get("$env_path.$_") for ($config->get_keys($env_path));
+
+    # reset to previous value
     $ENV{OPENXPKI_CONF_PATH} = $old_env if $old_env;
 
-    my $db_conf = $config->get_hash('system.database.main');
-    my $conf = {
-        type    => $db_conf->{type},
-        name    => $db_conf->{name},
-        host    => $db_conf->{host},
-        port    => $db_conf->{port},
-        user    => $db_conf->{user},
-        passwd  => $db_conf->{passwd},
-    };
-    # Set environment variables
-    my $db_env = $config->get_hash("system.database.main.environment");
-    $ENV{$_} = $db_env->{$_} for (keys %{$db_env});
-
-    return $conf;
+    return \%conf;
 }
 
 sub _db_config_from_env {
     my ($self) = @_;
-
-    return unless $ENV{OXI_TEST_DB_MYSQL_NAME};
 
     return {
         type    => "MariaDB",
@@ -1114,7 +1168,6 @@ sub _db_config_from_env {
         name    => $ENV{OXI_TEST_DB_MYSQL_NAME},
         user    => $ENV{OXI_TEST_DB_MYSQL_USER},
         passwd  => $ENV{OXI_TEST_DB_MYSQL_PASSWORD},
-
     };
 }
 
@@ -1135,14 +1188,14 @@ sub auth_config {
     my ($self) = @_;
     return {
         stack => {
-            $self->auth_stack() => {
+            "OxiTestAuthStack" => {
                 description => "OpenXPKI test authentication stack",
-                handler => "OxiTest",
-                type  => "Password",
+                handler => "OxiTestAuthHandler",
+                type  => "passwd",
             },
         },
         handler => {
-            "OxiTest" => {
+            "OxiTestAuthHandler" => {
                 label => "OpenXPKI test authentication handler",
                 type  => "Password",
                 user  => {
@@ -1158,6 +1211,7 @@ sub auth_config {
                     raop2 => {
                         digest => $self->password_hash,
                         role   => "RA Operator",
+                        tenant => 'Tenant B',
                     },
                     user => {
                         digest => $self->password_hash,
@@ -1165,7 +1219,8 @@ sub auth_config {
                     },
                     user2 => {
                         digest => $self->password_hash,
-                        role   => "User"
+                        role   => "User",
+                        tenant => 'Tenant B',
                     },
                 },
             },

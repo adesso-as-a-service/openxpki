@@ -38,58 +38,105 @@ cd core/htdocs_source
 nvm install
 ```
 
-### Ember CLI
+### Ember CLI and other global Tools
 
 ```bash
-nvm exec npm install -g ember-cli
+nvm use
+npm install -g ember-cli ember-cli-update npm-check-updates
 ```
 
 ## Installation of required Node.js modules
 
 ```bash
-nvm exec npm install
+nvm use
+npm install
 ```
 
 ## Running / Development
 
 To run the web UI locally you have to:
 
-1. Start an OpenXPKI backend via Docker or Vagrant. It's expected to listen on localhost:8080
+1. Start an OpenXPKI backend via Docker or Vagrant. It's expected to listen on localhost:8443
 2. Now run the Ember based web UI with live reload (on code changes) via:
-   `npm run serve` (this calls "ember serve ..." and proxies AJAX requests to localhost:8080)
+   `npm run serve` (this calls "ember serve ..." and proxies AJAX requests to localhost:8443)
 3. Visit the web UI at [http://localhost:4200/openxpki/#/](http://localhost:4200/openxpki/#/).
 4. Visit tests at [http://localhost:4200/openxpki/#/test](http://localhost:4200/openxpki/#/test).
 
 ### Linting
 
 ```bash
-nvm exec npm run lint:hbs
-nvm exec npm run lint:js
-nvm exec npm run lint:js -- --fix
+nvm use
+# Handlebars templates and JavaScript
+npm run lint
+npm run lint:fix
+# only Handlebars templates
+npm run lint:hbs
+npm run lint:hbs:fix
+# only JavaScript
+npm run lint:js
+npm run lint:js:fix
 ```
 
-### Building (production)
+### Build (production)
 
 ```bash
 make
 # or manually:
-nvm exec npm run build
+nvm use
+npm run build
 ```
 
 ### Updating ember-cli
 
 ```bash
+nvm use
 ember-cli-update
-nvm exec npm install
-nvm exec npm audit fix
-nvm exec npm dedupe
+npm audit fix
+npm dedupe
+# to install the modules on your host and update package-lock.json:
+npm install
 ```
+
+After this a [rebuild](#build-production) needs to be done.
+
+### Updating dependencies
+
+```bash
+nvm use
+# NOTE: the following command belongs to the package "npm-check-updates", not "ncu"!
+ncu -u
+# to install the modules on your host and update package-lock.json:
+npm install
+```
+
+After this a [rebuild](#build-production) needs to be done.
 
 ### Running Tests (currently not used)
 
 ```bash
-nvm exec ember test
-nvm exec ember test --server
+nvm use
+ember test
+ember test --server
+```
+
+## Hints
+
+### Inheriting template from parent component
+
+Please note that currently (Ember 3.20.3) inheriting the template does not work:
+
+```javascript
+import OxiFieldRawtextComponent from '../rawtext/component';
+import OxiFieldRawtextTemplate from '../rawtext/template';
+
+export default class OxiFieldTextComponent extends OxiFieldRawtextComponent {
+    layout OxiFieldRawtextTemplate;
+
+    @action
+    onInput(event) {
+        this.args.onChange(event.target.value);
+    }
+}
 ```
 
 ## Further Reading / Useful Links

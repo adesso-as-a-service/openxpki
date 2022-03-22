@@ -56,10 +56,11 @@ sub execute {
         subject => '',
         delimiter => '|',
         format => 'csv',
+        tenant => ($workflow->attrib('tenant') || ''),
     };
 
     # try to read those from the activity config
-    foreach my $key (qw(cutoff_notbefore cutoff_notafter include_revoked include_expired unique_subject profile subject head delimiter format)) {
+    foreach my $key (qw(cutoff_notbefore cutoff_notafter include_revoked include_expired unique_subject profile subject head delimiter format tenant)) {
         if (defined $self->param($key)) {
             $p->{$key} = $self->param($key);
         }
@@ -75,7 +76,7 @@ sub execute {
         my $config = CTX('config');
 
         # override selector config
-        foreach my $key (qw(cutoff_notbefore cutoff_notafter include_revoked include_expired unique_subject profile subject head delimiter format)) {
+        foreach my $key (qw(cutoff_notbefore cutoff_notafter include_revoked include_expired unique_subject profile subject head delimiter format tenant)) {
             if ($config->exists(['report', $report_config, $key])) {
 
                 # profile and subject can be a list
@@ -189,7 +190,7 @@ sub execute {
     my $join = '';
     # join csr table for profile
     if ($need_csr) {
-        $join = ' req_key=req_key csr ';
+        $join = ' {req_key=req_key,pki_realm=pki_realm} csr ';
         push @{$cols}, 'csr.profile';
     }
 
@@ -328,8 +329,7 @@ sub execute {
             $subject_seen ->{ $subject } = 1;
         }
 
-        my $serial = Math::BigInt->new( $item->{cert_key} )->as_hex();
-        $serial =~ s{\A 0x}{}xms;
+        my $serial = unpack('H*', Math::BigInt->new( $item->{cert_key})->to_bytes );
 
         my $status = $item->{status};
         if ($status eq 'ISSUED' && $item->{notafter} < $epoch) {
@@ -350,7 +350,10 @@ sub execute {
 
         my $attrib;
         if ($need_attr) {
-            $attrib = CTX('api2')->get_cert_attributes( identifier => $item->{identifier} );
+            $attrib = CTX('api2')->get_cert_attributes(
+                identifier => $item->{identifier},
+                tenant => $p->{tenant},
+            );
         } elsif(@attr) {
             foreach my $aa (@attr) {
                 # mock result of get_cert_attributes

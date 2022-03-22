@@ -46,6 +46,7 @@ sub dbi_connect_params {
 sub on_connect {
     my ($self, $dbh) = @_;
     $dbh->do("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED");
+    $dbh->do("SET CLIENT_MIN_MESSAGES TO WARNING");
 }
 
 # Parameters for SQL::Abstract::More
@@ -53,14 +54,10 @@ sub sqlam_params {
     limit_offset => 'LimitOffset',    # see SQL::Abstract::Limit source code
 }
 
-################################################################################
-# required by OpenXPKI::Server::Database::Role::Driver
-#
-
 sub sequence_create_query {
     my ($self, $dbi, $seq) = @_;
     return OpenXPKI::Server::Database::Query->new(
-        string => "CREATE SEQUENCE $seq START WITH 0 INCREMENT BY 1 MINVALUE 0 NO MAXVALUE ORDER",
+        string => "CREATE SEQUENCE $seq START WITH 0 INCREMENT BY 1 MINVALUE 0 NO MAXVALUE",
     );
 }
 
@@ -77,6 +74,14 @@ sub table_drop_query {
     return OpenXPKI::Server::Database::Query->new(
         string => "DROP TABLE IF EXISTS $table",
     );
+}
+
+sub do_sql_replacements {
+    my ($self, $sql) = @_;
+
+    $sql =~ s/from_unixtime \s* \( \s* ( [^\)]+ ) \)/TO_TIMESTAMP($1)/gmsxi;
+
+    return $sql;
 }
 
 ################################################################################

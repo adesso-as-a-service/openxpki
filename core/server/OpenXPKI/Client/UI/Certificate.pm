@@ -1,18 +1,22 @@
-# OpenXPKI::Client::UI::Certificate
-# Written 2013 by Oliver Welter
-# (C) Copyright 2013 by The OpenXPKI Project
-
 package OpenXPKI::Client::UI::Certificate;
-
 use Moose;
+
+# Core modules
 use Data::Dumper;
-use OpenXPKI::DN;
 use Math::BigInt;
+
+# CPAN modules
 use URI::Escape;
 use DateTime;
 use Digest::SHA qw(sha1_base64);
+
+# Project modules
+use OpenXPKI::DN;
 use OpenXPKI::i18n qw( i18nGettext );
 use OpenXPKI::Serialization::Simple;
+
+
+extends 'OpenXPKI::Client::UI::Result';
 
 
 has __default_grid_head => (
@@ -68,8 +72,6 @@ has __validity_options => (
 );
 
 
-extends 'OpenXPKI::Client::UI::Result';
-
 sub BUILD {
     my $self = shift;
 }
@@ -122,12 +124,19 @@ sub init_search {
     }
 
     my @fields = (
-        { name => 'subject', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SUBJECT', type => 'text', is_optional => 1, value => $preset->{subject} },
-        { name => 'san', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SAN', type => 'text', is_optional => 1, value => $preset->{san} },
-        { name => 'status', label => 'I18N_OPENXPKI_UI_CERTIFICATE_STATUS', type => 'select', is_optional => 1, prompt => 'all', options => \@states, , value => $preset->{status} },
-        { name => 'profile', label => 'I18N_OPENXPKI_UI_CERTIFICATE_PROFILE', type => 'select', is_optional => 1, prompt => 'all', options => \@profile_list, value => $preset->{profile} },
-        { name => 'issuer_identifier', label => 'I18N_OPENXPKI_UI_CERTIFICATE_ISSUER', type => 'select', is_optional => 1, prompt => 'all', options => \@issuer_list, value => $preset->{issuer_identifier} },
-        { name => 'validity', label => 'I18N_OPENXPKI_UI_CERTIFICATE_VALIDITY', 'keys' => $self->__validity_options(), type => 'datetime', is_optional => 1, clonable => 1, value => $preset->{validity_options} || [ { key => 'valid_at', value => '' }], },
+        { name => 'subject', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SUBJECT', placeholder => 'I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SUBJECT_PLACEHOLDER',
+            type => 'text', is_optional => 1, value => $preset->{subject} },
+        { name => 'san', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SAN', placeholder => 'I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SAN_PLACEHOLDER',
+            type => 'text', is_optional => 1, value => $preset->{san} },
+        { name => 'status', label => 'I18N_OPENXPKI_UI_CERTIFICATE_STATUS',
+            type => 'select', is_optional => 1, prompt => 'all', options => \@states, , value => $preset->{status} },
+        { name => 'profile', label => 'I18N_OPENXPKI_UI_CERTIFICATE_PROFILE',
+            type => 'select', is_optional => 1, prompt => 'all', options => \@profile_list, value => $preset->{profile} },
+        { name => 'issuer_identifier', label => 'I18N_OPENXPKI_UI_CERTIFICATE_ISSUER',
+            type => 'select', is_optional => 1, prompt => 'all', options => \@issuer_list, value => $preset->{issuer_identifier} },
+        { name => 'validity', label => 'I18N_OPENXPKI_UI_CERTIFICATE_VALIDITY', placeholder => 'I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_VALIDITY_PLACEHOLDER',
+            type => 'datetime', is_optional => 1, clonable => 1,
+            'keys' => $self->__validity_options(), value => $preset->{validity_options} || [ { key => 'valid_at', value => '' }], },
    );
 
     my $attributes = $self->_client->session()->param('certsearch')->{default}->{attributes};
@@ -143,12 +152,15 @@ sub init_search {
         push @fields, {
             name => 'attributes',
             label => 'I18N_OPENXPKI_UI_CERTIFICATE_METADATA',
+            placeholder => 'I18N_OPENXPKI_UI_SEARCH_METADATA_PLACEHOLDER',
             'keys' => \@attrib,
             type => 'text',
             is_optional => 1,
             'clonable' => 1,
             'value' => $preset->{attributes} || [{ 'key' => $attrib[0]->{value}, value => ''}],
         } if (@attrib);
+
+        unshift @meta_description, { value => 'I18N_OPENXPKI_UI_CERTIFICATE_METADATA', format => 'head' } if (@meta_description);
     }
 
     $self->add_section({
@@ -170,8 +182,10 @@ sub init_search {
            description => 'I18N_OPENXPKI_UI_CERTIFICATE_BY_IDENTIFIER_OR_SERIAL',
            submit_label => 'I18N_OPENXPKI_UI_WORKFLOW_SEARCH_SUBMIT_LABEL',
            fields => [
-               { name => 'cert_identifier', label => 'I18N_OPENXPKI_UI_CERTIFICATE_IDENTIFIER', type => 'text', is_optional => 1, value => $preset->{cert_identifier} },
-               { name => 'cert_serial', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SERIAL', type => 'text', is_optional => 1, value => $preset->{cert_serial} },
+               { name => 'cert_identifier', label => 'I18N_OPENXPKI_UI_CERTIFICATE_IDENTIFIER',
+                type => 'text', is_optional => 1, value => $preset->{cert_identifier} },
+               { name => 'cert_serial', label => 'I18N_OPENXPKI_UI_CERTIFICATE_SERIAL', placeholder => 'I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_SERIAL_PLACEHOLDER',
+                type => 'text', is_optional => 1, value => $preset->{cert_serial} },
            ]
         }},
     );
@@ -188,7 +202,7 @@ sub init_search {
               { label => 'I18N_OPENXPKI_UI_CERTIFICATE_PROFILE', value => 'I18N_OPENXPKI_UI_CERTIFICATE_PROFILE_HINT', format => 'raw' },
               { label => 'I18N_OPENXPKI_UI_CERTIFICATE_ISSUER',  value => 'I18N_OPENXPKI_UI_CERTIFICATE_ISSUER_HINT', format => 'raw' },
               { label => 'I18N_OPENXPKI_UI_CERTIFICATE_VALIDITY', value => 'I18N_OPENXPKI_UI_CERTIFICATE_VALIDITY_HINT', format => 'raw' },
-              @meta_description
+              @meta_description,
             ]
         }
     });
@@ -388,7 +402,8 @@ sub init_export {
                 push @line,  DateTime->from_epoch( epoch => $item->{ $field } )->iso8601();
 
             } elsif ($field eq 'cert_key_hex') {
-                push @line, Math::BigInt->new( $item->{cert_key} )->as_hex;
+                push @line, unpack('H*', Math::BigInt->new( $item->{cert_key})->to_bytes );
+
 
             } else {
                 push @line, $item->{ $field };
@@ -500,11 +515,12 @@ sub init_mine {
         },
         order => 'notbefore',
         reverse => 1,
+        $self->__tenant(),
     };
 
     $self->logger()->trace( "search query: " . Dumper $query) if $self->logger->is_trace;
 
-    my $search_result = $self->send_command_v2( 'search_cert', { %$query, ( limit => $limit, start => $startat ) } );
+    my $search_result = $self->send_command_v2( 'search_cert', { %$query, limit => $limit, start => $startat } );
 
     my $result_count = scalar @{$search_result};
     my $pager;
@@ -583,7 +599,7 @@ sub init_detail {
     my $cert = $self->send_command_v2( 'get_cert', {
         identifier => $cert_identifier,
         format => 'DBINFO',
-        attribute => 'subject_%' }, 1);
+        attribute => 'subject_alt_name' }, 1);
 
     if (!$cert) {
         $self->_page({
@@ -666,10 +682,10 @@ sub init_detail {
     #I18N_OPENXPKI_UI_CERTIFICATE_REASON_CODE_CESSATIONOFOPERATION
 
     push @fields, (
-        { label => 'I18N_OPENXPKI_UI_CERTIFICATE_SERIAL', format => 'tooltip', value => {
-            value => '0x'.$cert->{cert_key_hex},
-            tooltip => $cert->{cert_key}
-        }},
+        { label => 'I18N_OPENXPKI_UI_CERTIFICATE_SERIAL', format => 'ullist',
+            value => [ $cert->{cert_key_hex}, $cert->{cert_key} ],
+            className => 'certserial',
+        },
         { label => 'I18N_OPENXPKI_UI_CERTIFICATE_IDENTIFIER', value => $cert_identifier },
         { label => 'I18N_OPENXPKI_UI_CERTIFICATE_NOTBEFORE', value => $cert->{notbefore}, format => 'timestamp'  },
         { label => 'I18N_OPENXPKI_UI_CERTIFICATE_NOTAFTER', value => $cert->{notafter}, format => 'timestamp' },
@@ -686,10 +702,17 @@ sub init_detail {
     );
 
     # certificate metadata - show only for certificates from the current or empty realm
-    if ((my $metadata_config = $self->_client->session()->param('certdetails')->{metadata}) &&
-        (!$cert->{pki_realm} || $cert->{pki_realm} eq $self->_session->param('pki_realm')) &&
-        (my $cert_attrs = $self->send_command_v2( get_cert_attributes => { identifier => $cert_identifier, attribute => 'meta_%' }, 1))) {
+    sub {
+        my $metadata_config = $self->_client->session()->param('certdetails')->{metadata};
+        return unless ($metadata_config);
+        return unless (!$cert->{pki_realm} || $cert->{pki_realm} eq $self->_session->param('pki_realm'));
+        my $cert_attrs = $self->send_command_v2( get_cert_attributes => {
+                identifier => $cert_identifier,
+                attribute => 'meta_%',
+                $self->__tenant() }, 1);
+        return unless $cert_attrs;
         my @metadata_lines;
+
         for my $cfg (@$metadata_config) {
             my $line;
             if ($cfg->{template}) {
@@ -709,7 +732,7 @@ sub init_detail {
         push @fields, (
             { label => 'I18N_OPENXPKI_UI_CERTIFICATE_METADATA', value => \@metadata_lines, format => "rawlist" },
         ) if (scalar @metadata_lines);
-    }
+    }->();
 
     # for i18n parser I18N_OPENXPKI_CERT_ISSUED CRL_ISSUANCE_PENDING I18N_OPENXPKI_CERT_REVOKED I18N_OPENXPKI_CERT_EXPIRED
 
@@ -753,7 +776,11 @@ sub init_detail {
 
     # hide the related link if there is no data to display or cert is not from this realm
     if (($cert->{pki_realm} eq $self->_session->param('pki_realm')) &&
-        ($self->send_command_v2 ( "get_cert_attributes", { identifier => $cert_identifier, attribute => "system_workflow%" }))) {
+        ($self->send_command_v2 ( "get_cert_attributes", {
+            identifier => $cert_identifier,
+            attribute => "system_workflow%",
+            $self->__tenant()
+        }))) {
         push @fields, { label => 'I18N_OPENXPKI_UI_CERT_RELATED_LABEL', format => 'link', value => {
           page => 'certificate!related!identifier!'.$cert_identifier,
             label => 'I18N_OPENXPKI_UI_CERT_RELATED_HINT'
@@ -897,7 +924,7 @@ sub init_related {
 
     my @result;
     if (scalar @wfid) {
-        my $cert_workflows = $self->send_command_v2( 'search_workflow_instances', {  id => \@wfid, check_acl => 1 });
+        my $cert_workflows = $self->send_command_v2( 'search_workflow_instances', { id => \@wfid, check_acl => 1, $self->__tenant() });
         $self->logger()->trace("workflow results" . Dumper $cert_workflows) if ($self->logger()->is_trace());;
 
         my $workflow_labels = $self->send_command_v2( 'get_workflow_instance_types');
@@ -1071,9 +1098,11 @@ sub action_autocomplete {
     my $self = shift;
     my $args = shift;
 
-    my $term = $self->param('query') || '';
+    my $term = $self->param('cert_identifier') || '';
+    my $params = $self->fetch_autocomplete_params; # from OpenXPKI::Client::UI::Result
 
-    $self->logger()->trace( "autocomplete term: " . Dumper $term) if $self->logger->is_trace;
+    $self->logger()->trace( "autocomplete query: $term") if $self->logger->is_trace;
+
 
     my @result;
     # If we see a string with length of 25 to 27 with only base64 chars
@@ -1108,10 +1137,10 @@ sub action_autocomplete {
             valid_before => time(),
             expires_after => time(),
             status => 'ISSUED',
-            entity_only => 1
+            entity_only => 1,
+            %$params,
+            $self->__tenant(),
         });
-
-        $self->logger()->trace( "search result: " . Dumper $search_result) if $self->logger->is_trace;
 
         foreach my $item (@{$search_result}) {
             push @result, {
@@ -1164,7 +1193,8 @@ sub action_find {
         my $search_result = $self->send_command_v2( 'search_cert', {
             return_columns => 'identifier',
             cert_serial => $serial,
-            entity_only => 1
+            entity_only => 1,
+            $self->__tenant(),
         });
         if (!$search_result || @{$search_result} == 0) {
             $self->set_status('I18N_OPENXPKI_UI_CERTIFICATE_SEARCH_NO_SUCH_SERIAL','error');
@@ -1182,8 +1212,8 @@ sub action_find {
                 'id' => $queryid,
                 'type' => 'certificate',
                 'count' => scalar @{$search_result},
-                'query' => { cert_serial => $serial, entity_only => 1 },
-                'input' => { cert_serial => $self->param('cert_serial') },
+                'query' => { cert_serial => $serial, entity_only => 1, $self->__tenant() },
+                'input' => { cert_serial => scalar $self->param('cert_serial') },
                 'header' =>  $self->__default_grid_head,
                 'column' => $self->__default_grid_row,
                 'pager'  => {},
@@ -1209,19 +1239,17 @@ Handle search requests and display the result as grid
 
 sub action_search {
 
-
     my $self = shift;
     my $args = shift;
 
-
     $self->logger()->trace("input params: " . Dumper $self->cgi()->param()) if $self->logger->is_trace;
 
-    my $query = { entity_only => 1 };
+    my $query = { entity_only => 1, $self->__tenant() };
     my $input = {}; # store the input data the reopen the form later
     my $verbose = {};
     foreach my $key (qw(subject issuer_dn)) {
         my $val = $self->param($key);
-        $self->logger()->trace("$key: $val");
+        $self->logger()->trace("$key: " . ($val//''));
         if (defined $val && $val ne '') {
             $query->{$key} = '%'.$val.'%';
             $input->{$key} = $val;
@@ -1298,8 +1326,7 @@ sub action_search {
             $type = $1;
             $val = $2;
         }
-        $val =~ s{\*}{%}g;
-        $val =~ s{\?}{_}g;
+        $val = $self->transate_sql_wildcards($val);
         $attr->{subject_alt_name} = { -like => "$type:$val" };
     }
 
@@ -1413,7 +1440,7 @@ sub __render_result_list {
             } elsif ($col->{field} eq 'statusclass') {
                 push @line, lc($item->{status});
             } elsif ($col->{field} eq 'cert_key_hex') {
-                push @line, Math::BigInt->new( $item->{cert_key} )->as_hex;
+                push @line, unpack('H*', Math::BigInt->new( $item->{cert_key})->to_bytes );
             } else {
                 push @line, $item->{  $col->{field} };
             }
